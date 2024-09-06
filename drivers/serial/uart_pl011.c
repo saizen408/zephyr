@@ -33,7 +33,17 @@
 #endif
 
 #include "uart_pl011_registers.h"
+
+#if defined(CONFIG_SOC_FAMILY_AMBIQ)
 #include "uart_pl011_ambiq.h"
+#endif
+
+#if defined(CONFIG_SOC_SERIES_APOLLO3X)
+#define PM_INST_GET(n) PM_DEVICE_DT_INST_GET(n)
+#else
+#define PM_INST_GET(n) NULL
+#endif
+
 #include "uart_pl011_raspberrypi_pico.h"
 
 struct pl011_config {
@@ -86,6 +96,20 @@ static void pl011_enable_fifo(const struct device *dev)
 static void pl011_disable_fifo(const struct device *dev)
 {
 	get_uart(dev)->lcr_h &= ~PL011_LCRH_FEN;
+}
+
+static void pl011_set_flow_control(const struct device *dev, bool rts, bool cts)
+{
+	if (rts) {
+		get_uart(dev)->cr |= PL011_CR_RTSEn;
+	} else {
+		get_uart(dev)->cr &= ~PL011_CR_RTSEn;
+	}
+	if (cts) {
+		get_uart(dev)->cr |= PL011_CR_CTSEn;
+	} else {
+		get_uart(dev)->cr &= ~PL011_CR_CTSEn;
+	}
 }
 
 static int pl011_set_baudrate(const struct device *dev,
@@ -240,6 +264,10 @@ static int pl011_runtime_configure_internal(const struct device *dev,
 
 	switch (cfg->flow_ctrl) {
 	case UART_CFG_FLOW_CTRL_NONE:
+		pl011_set_flow_control(dev, false, false);
+		break;
+	case UART_CFG_FLOW_CTRL_RTS_CTS:
+		pl011_set_flow_control(dev, true, true);
 		break;
 	default:
 		goto enable;
@@ -506,7 +534,7 @@ static int pl011_init(const struct device *dev)
 	if (!data->sbsa) {
 		get_uart(dev)->dmacr = 0U;
 		barrier_isync_fence_full();
-		get_uart(dev)->cr &= ~(BIT(14) | BIT(15) | BIT(1));
+		get_uart(dev)->cr &= ~PL011_CR_SIREN;
 		get_uart(dev)->cr |= PL011_CR_RXE | PL011_CR_TXE;
 		barrier_isync_fence_full();
 	}
@@ -630,31 +658,30 @@ void pl011_isr(const struct device *dev)
 	};
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */
 
-#define PL011_INIT(n)						\
-	PINCTRL_DEFINE(n)					\
-	COMPAT_SPECIFIC_DEFINE(n)				\
-	PL011_CONFIG_PORT(n)					\
-								\
-	static struct pl011_data pl011_data_port_##n = {	\
-		.uart_cfg = {					\
-			.baudrate = DT_INST_PROP(n, current_speed), \
-			.parity = UART_CFG_PARITY_NONE,			\
-			.stop_bits = UART_CFG_STOP_BITS_1,		\
-			.data_bits = UART_CFG_DATA_BITS_8,		\
-			.flow_ctrl = UART_CFG_FLOW_CTRL_NONE,		\
-		},							\
-		.clk_freq = COND_CODE_1(                                                \
-			DT_NODE_HAS_COMPAT(DT_INST_CLOCKS_CTLR(n), fixed_clock),        \
-			(DT_INST_PROP_BY_PHANDLE(n, clocks, clock_frequency)), (0)),    \
-	};							\
-								\
-	DEVICE_DT_INST_DEFINE(n, &pl011_init,			\
-			NULL,					\
-			&pl011_data_port_##n,			\
-			&pl011_cfg_port_##n,			\
-			PRE_KERNEL_1,				\
-			CONFIG_SERIAL_INIT_PRIORITY,		\
-			&pl011_driver_api);
+#define PL011_INIT(n)                                                                              \
+	PINCTRL_DEFINE(n)                                                                          \
+	COMPAT_SPECIFIC_DEFINE(n)                                                                  \
+	PL011_CONFIG_PORT(n)                                                                       \
+                                                                                                   \
+	static struct pl011_data pl011_data_port_##n = {                                           \
+		.uart_cfg =                                                                        \
+			{                                                                          \
+				.baudrate = DT_INST_PROP(n, current_speed),                        \
+				.parity = UART_CFG_PARITY_NONE,                                    \
+				.stop_bits = UART_CFG_STOP_BITS_1,                                 \
+				.data_bits = UART_CFG_DATA_BITS_8,                                 \
+				.flow_ctrl = DT_INST_PROP(n, hw_flow_control)                      \
+						     ? UART_CFG_FLOW_CTRL_RTS_CTS                  \
+						     : UART_CFG_FLOW_CTRL_NONE,                    \
+			},                                                                         \
+		.clk_freq =                                                                        \
+			COND_CODE_1(DT_NODE_HAS_COMPAT(DT_INST_CLOCKS_CTLR(n), fixed_clock),       \
+				    (DT_INST_PROP_BY_PHANDLE(n, clocks, clock_frequency)), (0)),   \
+	};                                                                                         \
+                                                                                                   \
+	DEVICE_DT_INST_DEFINE(n, pl011_init, PM_INST_GET(n), &pl011_data_port_##n,       \
+			      &pl011_cfg_port_##n, PRE_KERNEL_1, CONFIG_SERIAL_INIT_PRIORITY,      \
+			      &pl011_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(PL011_INIT)
 
@@ -689,7 +716,7 @@ DT_INST_FOREACH_STATUS_OKAY(PL011_INIT)
 		.sbsa = true,					\
 	};							\
 								\
-	DEVICE_DT_INST_DEFINE(n, &pl011_init,			\
+	DEVICE_DT_INST_DEFINE(n, pl011_init,			\
 			NULL,					\
 			&pl011_data_sbsa_##n,			\
 			&pl011_cfg_sbsa_##n,			\

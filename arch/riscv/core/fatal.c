@@ -98,12 +98,12 @@ FUNC_NORETURN void z_riscv_fatal_error_csf(unsigned int reason, const struct arc
 #endif /* CONFIG_RISCV_ISA_RV32E */
 		LOG_ERR("");
 	}
-
-	if (IS_ENABLED(CONFIG_EXCEPTION_STACK_TRACE)) {
-		z_riscv_unwind_stack(esf, csf);
-	}
-
 #endif /* CONFIG_EXCEPTION_DEBUG */
+
+#ifdef CONFIG_EXCEPTION_STACK_TRACE
+	z_riscv_unwind_stack(esf, csf);
+#endif /* CONFIG_EXCEPTION_STACK_TRACE */
+
 	z_fatal_error(reason, esf);
 	CODE_UNREACHABLE;
 }
@@ -226,6 +226,13 @@ void _Fault(struct arch_esf *esf)
 	unsigned int reason = K_ERR_CPU_EXCEPTION;
 
 	if (bad_stack_pointer(esf)) {
+#ifdef CONFIG_PMP_STACK_GUARD
+		/*
+		 * Remove the thread's PMP setting to prevent triggering a stack
+		 * overflow error again due to the previous configuration.
+		 */
+		z_riscv_pmp_stackguard_disable();
+#endif /* CONFIG_PMP_STACK_GUARD */
 		reason = K_ERR_STACK_CHK_FAIL;
 	}
 

@@ -68,7 +68,7 @@ directory.  This allows to construct and run everything from a common place.
 Step 1: Build/Flash MCUboot
 ===========================
 
-The MCUboot can be build following the instructions in the :ref:`mcuboot`
+The MCUboot can be built following the instructions in the :ref:`mcuboot`
 documentation page.  Flash the resulting image file using west on
 ``terminal 1``.
 
@@ -204,10 +204,9 @@ Step 4.3: Build for IEEE 802.15.4 [experimental]
 
 For IEEE 802.15.4 needs add ``overlay-802154.conf``.  This requires two nodes:
 one will be the host and the second one will be the device under test.  The
-validation needs a Linux kernel >= 4.9 with all 6loWPAN support.  The start
-point is try reproduce the Zephyr :zephyr:code-sample:`wpan-usb`. It is out of scope
+validation needs a Linux kernel >= 4.9 with all 6loWPAN support. It is out of scope
 at this moment provide support since it is experimental.  The gateway was
-tested with both native linux driver and ``atusb`` and with ``wpanusb`` sample.
+tested with both native linux driver and ``atusb``.
 
 .. zephyr-app-commands::
     :zephyr-app: zephyr/samples/subsys/mgmt/updatehub

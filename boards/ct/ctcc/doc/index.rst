@@ -21,12 +21,17 @@ This board has following features:
 * :abbr:`USB (Universal Serial Bus)`
 * :abbr:`WDT (Watchdog Timer)`
 
-.. figure:: img/ctcc_nrf52840.webp
+.. figure:: img/ctcc_nrf52840_mpcie.webp
      :align: center
-     :width: 300
-     :alt: CTCC nRF52840
+     :alt: CTCC nRF52840 mPCIe
 
-     ctcc/nrf52840 board target
+     ctcc/nrf52840 mPCie board
+
+.. figure:: img/ctcc_nrf52840_m2.webp
+     :align: center
+     :alt: CTCC nRF52840 M.2
+
+     ctcc/nrf52840 M.2 board
 
 More information about the board can be found at the
 `ctcc_nrf52840 Website`_ and for SoC information: `Nordic Semiconductor Infocenter`_.
@@ -150,7 +155,7 @@ Zephyr repositories using :ref:`west` tool.
 #. Flash other Zephyr application to fill in slot0 e.g:
 
    .. zephyr-app-commands::
-      :app: samples/subsys/usb/dfu
+      :zephyr-app: samples/subsys/usb/dfu
       :board: ctcc/nrf52840
       :build-dir: dfu
       :goals: build

@@ -186,6 +186,8 @@ testing:
   testing relating keywords to provide best coverage for the features of this
   board.
 
+.. _twister_default_testing_board:
+
   default: [True|False]:
     This is a default board, it will tested with the highest priority and is
     covered when invoking the simplified twister without any additional
@@ -217,6 +219,15 @@ Tests are detected by the presence of a ``testcase.yaml`` or a ``sample.yaml``
 files in the application's project directory. This test application
 configuration file may contain one or more entries in the tests section each
 identifying a test scenario.
+
+.. _twister_test_project_diagram:
+
+.. figure:: figures/twister_test_project.svg
+   :alt: Twister and a Test applications' project.
+   :figclass: align-center
+
+   Twister and a Test applications' project.
+
 
 Test application configurations are written using the YAML syntax and share the
 same structure as samples.
@@ -306,6 +317,8 @@ identifier in the YAML files.
 
 Each test scenario entry in the test application configuration can define the
 following key/value pairs:
+
+..  _test_config_args:
 
 tags: <list of tags> (required)
     A set of string tags for the test scenario. Usually pertains to
@@ -615,8 +628,11 @@ harness_config: <harness configuration options>
         If the scope is set to ``function``, DUT is launched for every test case
         in python script. For ``session`` scope, DUT is launched only once.
 
-    robot_test_path: <robot file path> (default empty)
-        Specify a path to a file containing a Robot Framework test suite to be run.
+    robot_testsuite: <robot file path> (default empty)
+        Specify one or more paths to a file containing a Robot Framework test suite to be run.
+
+    robot_option: <robot option> (default empty)
+        One or more options to be send to robotframework.
 
     bsim_exe_name: <string>
         If provided, the executable filename when copying to BabbleSim's bin
@@ -673,7 +689,33 @@ harness_config: <harness configuration options>
           robot.example:
             harness: robot
             harness_config:
-              robot_test_path: [robot file path]
+              robot_testsuite: [robot file path]
+
+    It can be more than one test suite using a list.
+
+    .. code-block:: yaml
+
+        tests:
+          robot.example:
+            harness: robot
+            harness_config:
+              robot_testsuite:
+                - [robot file path 1]
+                - [robot file path 2]
+                - [robot file path n]
+
+    One or more options can be passed to robotframework.
+
+    .. code-block:: yaml
+
+        tests:
+          robot.example:
+            harness: robot
+            harness_config:
+              robot_testsuite: [robot file path]
+              robot_option:
+                - --exclude tag
+                - --stop-on-error
 
 filter: <expression>
     Filter whether the test scenario should be run by evaluating an expression
@@ -784,6 +826,37 @@ To load arguments from a file, add ``+`` before the file name, e.g.,
 line break instead of white spaces.
 
 Most everyday users will run with no arguments.
+
+Selecting platform scope
+************************
+
+One of the key features of Twister is its ability to decide on which platforms a given
+test scenario should run. This behavior has its roots in Twister being developed as
+a test runner for Zephyr's CI. With hundreds of available platforms and thousands of
+tests, the testing tools should be able to adapt the scope and select/filter out what
+is relevant and what is not.
+
+Twister always prepares an initial list of platforms in scope for a given test,
+based on command line arguments and the :ref:`test's configuration <test_config_args>`. Then,
+platforms that don't fulfill the conditions required in the configuration yaml
+(e.g. minimum ram) are filtered out from the scope.
+Using ``--force-platform`` allows to override filtering caused by ``platform_allow``,
+``platform_exclude``, ``arch_allow`` and ``arch_exclude`` keys in test configuration
+files.
+
+Command line arguments define the initial scope in the following way:
+
+* ``-p/--platform <platform_name>`` (can be used multiple times): only platforms
+  passed with this argument;
+* ``-l/--all``: all available platforms;
+* ``-G/--integration``: all platforms from an ``integration_platforms`` list in
+  a given test configuration file. If a test has no ``integration_platforms``
+  `"scope presumption"` will happen;
+* No scope argument: `"scope presumption"` will happen.
+
+`"Scope presumption"`: A list of Twister's :ref:`default platforms <twister_default_testing_board>`
+is used as the initial list. If nothing is left after the filtration, the ``platform_allow`` list
+is used as the initial scope.
 
 Managing tests timeouts
 ***********************
@@ -1128,7 +1201,7 @@ When running ``twister`` with ``--device-testing``, the configured fixture
 in the hardware map file will be matched to test scenarios requesting the same fixtures
 and these tests will be executed on the boards that provide this fixture.
 
-.. figure:: fixtures.svg
+.. figure:: figures/fixtures.svg
    :figclass: align-center
 
 Fixtures can also be provided via twister command option ``--fixture``, this option

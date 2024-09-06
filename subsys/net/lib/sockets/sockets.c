@@ -639,11 +639,6 @@ int zsock_accept_ctx(struct net_context *parent, struct sockaddr *addr,
 	struct net_pkt *last_pkt;
 	int fd, ret;
 
-	fd = zvfs_reserve_fd();
-	if (fd < 0) {
-		return -1;
-	}
-
 	if (!sock_is_nonblock(parent)) {
 		k_timeout_t timeout = K_FOREVER;
 
@@ -652,7 +647,6 @@ int zsock_accept_ctx(struct net_context *parent, struct sockaddr *addr,
 		 */
 		ret = zsock_wait_data(parent, &timeout);
 		if (ret < 0) {
-			zvfs_free_fd(fd);
 			errno = -ret;
 			return -1;
 		}
@@ -660,8 +654,14 @@ int zsock_accept_ctx(struct net_context *parent, struct sockaddr *addr,
 
 	ctx = k_fifo_get(&parent->accept_q, K_NO_WAIT);
 	if (ctx == NULL) {
-		zvfs_free_fd(fd);
 		errno = EAGAIN;
+		return -1;
+	}
+
+	fd = zvfs_reserve_fd();
+	if (fd < 0) {
+		zsock_flush_queue(ctx);
+		net_context_put(ctx);
 		return -1;
 	}
 
@@ -798,7 +798,7 @@ static int send_check_and_wait(struct net_context *ctx, int status,
 	}
 
 	if (status == -ENOBUFS) {
-		/* We can monitor net_pkt/net_buf avaialbility, so just wait. */
+		/* We can monitor net_pkt/net_buf availability, so just wait. */
 		k_sleep(K_MSEC(*retry_timeout));
 	}
 
@@ -1265,6 +1265,8 @@ void net_socket_update_tc_rx_time(struct net_pkt *pkt, uint32_t end_tick)
 				    net_pkt_create_time(pkt),
 				    end_tick);
 
+	SYS_PORT_TRACING_FUNC(net, rx_time, pkt, end_tick);
+
 	if (IS_ENABLED(CONFIG_NET_PKT_RXTIME_STATS_DETAIL)) {
 		uint32_t val, prev = net_pkt_create_time(pkt);
 		int i;
@@ -1426,6 +1428,22 @@ out:
 	return ret;
 }
 
+static int update_msg_controllen(struct msghdr *msg)
+{
+	struct cmsghdr *cmsg;
+	size_t cmsg_space = 0;
+
+	for (cmsg = CMSG_FIRSTHDR(msg); cmsg != NULL; cmsg = CMSG_NXTHDR(msg, cmsg)) {
+		if (cmsg->cmsg_len == 0) {
+			break;
+		}
+		cmsg_space += cmsg->cmsg_len;
+	}
+	msg->msg_controllen = cmsg_space;
+
+	return 0;
+}
+
 static inline ssize_t zsock_recv_dgram(struct net_context *ctx,
 				       struct msghdr *msg,
 				       void *buf,
@@ -1570,10 +1588,8 @@ static inline ssize_t zsock_recv_dgram(struct net_context *ctx,
 	if (msg != NULL) {
 		if (msg->msg_control != NULL) {
 			if (msg->msg_controllen > 0) {
-				bool clear_controllen = true;
-
-				if (IS_ENABLED(CONFIG_NET_CONTEXT_TIMESTAMPING)) {
-					clear_controllen = false;
+				if (IS_ENABLED(CONFIG_NET_CONTEXT_TIMESTAMPING) &&
+				    net_context_is_timestamping_set(ctx)) {
 					if (add_timestamping(ctx, pkt, msg) < 0) {
 						msg->msg_flags |= ZSOCK_MSG_CTRUNC;
 					}
@@ -1581,22 +1597,25 @@ static inline ssize_t zsock_recv_dgram(struct net_context *ctx,
 
 				if (IS_ENABLED(CONFIG_NET_CONTEXT_RECV_PKTINFO) &&
 				    net_context_is_recv_pktinfo_set(ctx)) {
-					clear_controllen = false;
 					if (add_pktinfo(ctx, pkt, msg) < 0) {
 						msg->msg_flags |= ZSOCK_MSG_CTRUNC;
 					}
 				}
 
-				if (clear_controllen) {
-					msg->msg_controllen = 0;
-				}
+				/* msg_controllen must be updated to reflect the total length of all
+				 * control messages in the buffer. If there are no control data,
+				 * msg_controllen will be cleared as expected It will also take into
+				 * account pre-existing control data
+				 */
+				update_msg_controllen(msg);
 			}
 		} else {
 			msg->msg_controllen = 0U;
 		}
 	}
 
-	if (IS_ENABLED(CONFIG_NET_PKT_RXTIME_STATS) &&
+	if ((IS_ENABLED(CONFIG_NET_PKT_RXTIME_STATS) ||
+	     IS_ENABLED(CONFIG_TRACING_NET_CORE)) &&
 	    !(flags & ZSOCK_MSG_PEEK)) {
 		net_socket_update_tc_rx_time(pkt, k_cycle_get_32());
 	}
@@ -1669,7 +1688,8 @@ static size_t zsock_recv_stream_immediate(struct net_context *ctx, uint8_t **buf
 					sock_set_eof(ctx);
 				}
 
-				if (IS_ENABLED(CONFIG_NET_PKT_RXTIME_STATS)) {
+				if (IS_ENABLED(CONFIG_NET_PKT_RXTIME_STATS) ||
+				    IS_ENABLED(CONFIG_TRACING_NET_CORE)) {
 					net_socket_update_tc_rx_time(pkt, k_cycle_get_32());
 				}
 
@@ -2305,6 +2325,224 @@ static int zsock_poll_update_ctx(struct net_context *ctx,
 
 	return 0;
 }
+
+static inline int time_left(uint32_t start, uint32_t timeout)
+{
+	uint32_t elapsed = k_uptime_get_32() - start;
+
+	return timeout - elapsed;
+}
+
+int zsock_poll_internal(struct zsock_pollfd *fds, int nfds, k_timeout_t timeout)
+{
+	bool retry;
+	int ret = 0;
+	int i;
+	struct zsock_pollfd *pfd;
+	struct k_poll_event poll_events[CONFIG_NET_SOCKETS_POLL_MAX];
+	struct k_poll_event *pev;
+	struct k_poll_event *pev_end = poll_events + ARRAY_SIZE(poll_events);
+	const struct fd_op_vtable *vtable;
+	struct k_mutex *lock;
+	k_timepoint_t end;
+	bool offload = false;
+	const struct fd_op_vtable *offl_vtable = NULL;
+	void *offl_ctx = NULL;
+
+	end = sys_timepoint_calc(timeout);
+
+	pev = poll_events;
+	for (pfd = fds, i = nfds; i--; pfd++) {
+		void *ctx;
+		int result;
+
+		/* Per POSIX, negative fd's are just ignored */
+		if (pfd->fd < 0) {
+			continue;
+		}
+
+		ctx = get_sock_vtable(pfd->fd,
+				      (const struct socket_op_vtable **)&vtable,
+				      &lock);
+		if (ctx == NULL) {
+			/* Will set POLLNVAL in return loop */
+			continue;
+		}
+
+		(void)k_mutex_lock(lock, K_FOREVER);
+
+		result = zvfs_fdtable_call_ioctl(vtable, ctx,
+					      ZFD_IOCTL_POLL_PREPARE,
+					      pfd, &pev, pev_end);
+		if (result == -EALREADY) {
+			/* If POLL_PREPARE returned with EALREADY, it means
+			 * it already detected that some socket is ready. In
+			 * this case, we still perform a k_poll to pick up
+			 * as many events as possible, but without any wait.
+			 */
+			timeout = K_NO_WAIT;
+			end = sys_timepoint_calc(timeout);
+			result = 0;
+		} else if (result == -EXDEV) {
+			/* If POLL_PREPARE returned EXDEV, it means
+			 * it detected an offloaded socket.
+			 * If offloaded socket is used with native TLS, the TLS
+			 * wrapper for the offloaded poll will be used.
+			 * In case the fds array contains a mixup of offloaded
+			 * and non-offloaded sockets, the offloaded poll handler
+			 * shall return an error.
+			 */
+			offload = true;
+			if (offl_vtable == NULL || net_socket_is_tls(ctx)) {
+				offl_vtable = vtable;
+				offl_ctx = ctx;
+			}
+
+			result = 0;
+		}
+
+		k_mutex_unlock(lock);
+
+		if (result < 0) {
+			errno = -result;
+			return -1;
+		}
+	}
+
+	if (offload) {
+		int poll_timeout;
+
+		if (K_TIMEOUT_EQ(timeout, K_FOREVER)) {
+			poll_timeout = SYS_FOREVER_MS;
+		} else {
+			poll_timeout = k_ticks_to_ms_floor32(timeout.ticks);
+		}
+
+		return zvfs_fdtable_call_ioctl(offl_vtable, offl_ctx,
+					    ZFD_IOCTL_POLL_OFFLOAD,
+					    fds, nfds, poll_timeout);
+	}
+
+	timeout = sys_timepoint_timeout(end);
+
+	do {
+		ret = k_poll(poll_events, pev - poll_events, timeout);
+		/* EAGAIN when timeout expired, EINTR when cancelled (i.e. EOF) */
+		if (ret != 0 && ret != -EAGAIN && ret != -EINTR) {
+			errno = -ret;
+			return -1;
+		}
+
+		retry = false;
+		ret = 0;
+
+		pev = poll_events;
+		for (pfd = fds, i = nfds; i--; pfd++) {
+			void *ctx;
+			int result;
+
+			pfd->revents = 0;
+
+			if (pfd->fd < 0) {
+				continue;
+			}
+
+			ctx = get_sock_vtable(
+				pfd->fd,
+				(const struct socket_op_vtable **)&vtable,
+				&lock);
+			if (ctx == NULL) {
+				pfd->revents = ZSOCK_POLLNVAL;
+				ret++;
+				continue;
+			}
+
+			(void)k_mutex_lock(lock, K_FOREVER);
+
+			result = zvfs_fdtable_call_ioctl(vtable, ctx,
+						      ZFD_IOCTL_POLL_UPDATE,
+						      pfd, &pev);
+			k_mutex_unlock(lock);
+
+			if (result == -EAGAIN) {
+				retry = true;
+				continue;
+			} else if (result != 0) {
+				errno = -result;
+				return -1;
+			}
+
+			if (pfd->revents != 0) {
+				ret++;
+			}
+		}
+
+		if (retry) {
+			if (ret > 0) {
+				break;
+			}
+
+			timeout = sys_timepoint_timeout(end);
+
+			if (K_TIMEOUT_EQ(timeout, K_NO_WAIT)) {
+				break;
+			}
+		}
+	} while (retry);
+
+	return ret;
+}
+
+int z_impl_zsock_poll(struct zsock_pollfd *fds, int nfds, int poll_timeout)
+{
+	k_timeout_t timeout;
+	int ret;
+
+	SYS_PORT_TRACING_OBJ_FUNC_ENTER(socket, poll, fds, nfds, poll_timeout);
+
+	if (poll_timeout < 0) {
+		timeout = K_FOREVER;
+	} else {
+		timeout = K_MSEC(poll_timeout);
+	}
+
+	ret = zsock_poll_internal(fds, nfds, timeout);
+
+	SYS_PORT_TRACING_OBJ_FUNC_EXIT(socket, poll, fds, nfds,
+				       ret < 0 ? -errno : ret);
+	return ret;
+}
+
+#ifdef CONFIG_USERSPACE
+static inline int z_vrfy_zsock_poll(struct zsock_pollfd *fds,
+				    int nfds, int timeout)
+{
+	struct zsock_pollfd *fds_copy;
+	size_t fds_size;
+	int ret;
+
+	/* Copy fds array from user mode */
+	if (size_mul_overflow(nfds, sizeof(struct zsock_pollfd), &fds_size)) {
+		errno = EFAULT;
+		return -1;
+	}
+	fds_copy = k_usermode_alloc_from_copy((void *)fds, fds_size);
+	if (!fds_copy) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	ret = z_impl_zsock_poll(fds_copy, nfds, timeout);
+
+	if (ret >= 0) {
+		k_usermode_to_copy((void *)fds, fds_copy, fds_size);
+	}
+	k_free(fds_copy);
+
+	return ret;
+}
+#include <zephyr/syscalls/zsock_poll_mrsh.c>
+#endif
 
 int z_impl_zsock_inet_pton(sa_family_t family, const char *src, void *dst)
 {

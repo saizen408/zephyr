@@ -549,7 +549,7 @@ static int map_anon_page(void *addr, uint32_t flags)
 	}
 
 	phys = k_mem_page_frame_to_phys(pf);
-	arch_mem_map(addr, phys, CONFIG_MMU_PAGE_SIZE, flags | K_MEM_CACHE_WB);
+	arch_mem_map(addr, phys, CONFIG_MMU_PAGE_SIZE, flags);
 
 	if (lock) {
 		k_mem_page_frame_set(pf, K_MEM_PAGE_FRAME_PINNED);
@@ -575,28 +575,34 @@ void *k_mem_map_phys_guard(uintptr_t phys, size_t size, uint32_t flags, bool is_
 	uint8_t *pos;
 	bool uninit = (flags & K_MEM_MAP_UNINIT) != 0U;
 
-	__ASSERT(!(((flags & K_MEM_PERM_USER) != 0U) &&
-		   ((flags & K_MEM_MAP_UNINIT) != 0U)),
-		 "user access to anonymous uninitialized pages is forbidden");
-	__ASSERT(size % CONFIG_MMU_PAGE_SIZE == 0U,
-		 "unaligned size %zu passed to %s", size, __func__);
-	__ASSERT(size != 0, "zero sized memory mapping");
 	__ASSERT(!is_anon || (is_anon && page_frames_initialized),
 		 "%s called too early", __func__);
 	__ASSERT((flags & K_MEM_CACHE_MASK) == 0U,
 		 "%s does not support explicit cache settings", __func__);
 
-	CHECKIF(size_add_overflow(size, CONFIG_MMU_PAGE_SIZE * 2, &total_size)) {
+	if (((flags & K_MEM_PERM_USER) != 0U) &&
+	    ((flags & K_MEM_MAP_UNINIT) != 0U)) {
+		LOG_ERR("user access to anonymous uninitialized pages is forbidden");
+		return NULL;
+	}
+	if ((size % CONFIG_MMU_PAGE_SIZE) != 0U) {
+		LOG_ERR("unaligned size %zu passed to %s", size, __func__);
+		return NULL;
+	}
+	if (size == 0) {
+		LOG_ERR("zero sized memory mapping");
+		return NULL;
+	}
+
+	/* Need extra for the guard pages (before and after) which we
+	 * won't map.
+	 */
+	if (size_add_overflow(size, CONFIG_MMU_PAGE_SIZE * 2, &total_size)) {
 		LOG_ERR("too large size %zu passed to %s", size, __func__);
 		return NULL;
 	}
 
 	key = k_spin_lock(&z_mm_lock);
-
-	/* Need extra for the guard pages (before and after) which we
-	 * won't map.
-	 */
-	total_size = size + (CONFIG_MMU_PAGE_SIZE * 2);
 
 	dst = virt_region_alloc(total_size, CONFIG_MMU_PAGE_SIZE);
 	if (dst == NULL) {
@@ -615,17 +621,35 @@ void *k_mem_map_phys_guard(uintptr_t phys, size_t size, uint32_t flags, bool is_
 	dst += CONFIG_MMU_PAGE_SIZE;
 
 	if (is_anon) {
-		/* Mapping from annoymous memory */
-		VIRT_FOREACH(dst, size, pos) {
-			ret = map_anon_page(pos, flags);
+		/* Mapping from anonymous memory */
+		flags |= K_MEM_CACHE_WB;
+#ifdef CONFIG_DEMAND_MAPPING
+		if ((flags & K_MEM_MAP_LOCK) == 0) {
+			flags |= K_MEM_MAP_UNPAGED;
+			VIRT_FOREACH(dst, size, pos) {
+				arch_mem_map(pos,
+					     uninit ? ARCH_UNPAGED_ANON_UNINIT
+						    : ARCH_UNPAGED_ANON_ZERO,
+					     CONFIG_MMU_PAGE_SIZE, flags);
+			}
+			LOG_DBG("memory mapping anon pages %p to %p unpaged", dst, pos-1);
+			/* skip the memset() below */
+			uninit = true;
+		} else
+#endif
+		{
+			VIRT_FOREACH(dst, size, pos) {
+				ret = map_anon_page(pos, flags);
 
-			if (ret != 0) {
-				/* TODO: call k_mem_unmap(dst, pos - dst)  when
-				 * implemented in #28990 and release any guard virtual
-				 * page as well.
-				 */
-				dst = NULL;
-				goto out;
+				if (ret != 0) {
+					/* TODO:
+					 * call k_mem_unmap(dst, pos - dst)
+					 * when implemented in #28990 and
+					 * release any guard virtual page as well.
+					 */
+					dst = NULL;
+					goto out;
+				}
 			}
 		}
 	} else {
@@ -789,6 +813,36 @@ out:
 	k_spin_unlock(&z_mm_lock, key);
 }
 
+int k_mem_update_flags(void *addr, size_t size, uint32_t flags)
+{
+	uintptr_t phys;
+	k_spinlock_key_t key;
+	int ret;
+
+	k_mem_assert_virtual_region(addr, size);
+
+	key = k_spin_lock(&z_mm_lock);
+
+	/*
+	 * We can achieve desired result without explicit architecture support
+	 * by unmapping and remapping the same physical memory using new flags.
+	 */
+
+	ret = arch_page_phys_get(addr, &phys);
+	if (ret < 0) {
+		goto out;
+	}
+
+	/* TODO: detect and handle paged-out memory as well */
+
+	arch_mem_unmap(addr, size);
+	arch_mem_map(addr, phys, size, flags);
+
+out:
+	k_spin_unlock(&z_mm_lock, key);
+	return ret;
+}
+
 size_t k_mem_free_get(void)
 {
 	size_t ret;
@@ -881,8 +935,9 @@ void k_mem_map_phys_bare(uint8_t **virt_ptr, uintptr_t phys, size_t size, uint32
 			num_bits = adjusted_sz / CONFIG_MMU_PAGE_SIZE;
 			offset = virt_to_bitmap_offset(adjusted_start, adjusted_sz);
 			if (sys_bitarray_test_and_set_region(
-			    &virt_region_bitmap, num_bits, offset, true))
+			    &virt_region_bitmap, num_bits, offset, true)) {
 				goto fail;
+			}
 		}
 	} else {
 		/* Obtain an appropriately sized chunk of virtual memory */
@@ -1107,6 +1162,20 @@ extern struct k_mem_paging_histogram_t z_paging_histogram_backing_store_page_out
 
 static inline void do_backing_store_page_in(uintptr_t location)
 {
+#ifdef CONFIG_DEMAND_MAPPING
+	/* Check for special cases */
+	switch (location) {
+	case ARCH_UNPAGED_ANON_ZERO:
+		memset(K_MEM_SCRATCH_PAGE, 0, CONFIG_MMU_PAGE_SIZE);
+		__fallthrough;
+	case ARCH_UNPAGED_ANON_UNINIT:
+		/* nothing else to do */
+		return;
+	default:
+		break;
+	}
+#endif /* CONFIG_DEMAND_MAPPING */
+
 #ifdef CONFIG_DEMAND_PAGING_TIMING_HISTOGRAM
 	uint32_t time_diff;
 

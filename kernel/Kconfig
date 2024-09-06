@@ -276,7 +276,7 @@ choice DYNAMIC_THREAD_PREFER
 	help
 	  If both CONFIG_DYNAMIC_THREAD_ALLOC=y and
 	  CONFIG_DYNAMIC_THREAD_POOL_SIZE > 0, then the user may
-	  specify the order in which allocation is attmpted.
+	  specify the order in which allocation is attempted.
 
 config DYNAMIC_THREAD_PREFER_ALLOC
 	bool "Prefer heap-based allocation"
@@ -638,7 +638,7 @@ config TIMESLICING
 config TIMESLICE_SIZE
 	int "Time slice size (in ms)"
 	default 0
-	range 0 2147483647
+	range 0 $(INT32_MAX)
 	depends on TIMESLICING
 	help
 	  This option specifies the maximum amount of time a thread can execute
@@ -752,13 +752,6 @@ endif # KERNEL_MEM_POOL
 
 endmenu
 
-config ARCH_HAS_CUSTOM_SWAP_TO_MAIN
-	bool
-	help
-	  It's possible that an architecture port cannot use _Swap() to swap to
-	  the _main() thread, but instead must do something custom. It must
-	  enable this option in that case.
-
 config SWAP_NONATOMIC
 	bool
 	help
@@ -771,12 +764,11 @@ config SWAP_NONATOMIC
 	  ARM when the PendSV exception priority sits below that of
 	  Zephyr-handled interrupts.
 
-config ARCH_HAS_CUSTOM_BUSY_WAIT
+config ARCH_HAS_THREAD_NAME_HOOK
 	bool
 	help
-	  It's possible that an architecture port cannot or does not want to use
-	  the provided k_busy_wait(), but instead must do something custom. It must
-	  enable this option in that case.
+	  The architecture provides a hook to handle thread name changes beyond
+	  just storing it in the kernel structure.
 
 config SYS_CLOCK_TICKS_PER_SEC
 	int "System tick frequency (in ticks/second)"
@@ -991,7 +983,7 @@ config TOOLCHAIN_SUPPORTS_STATIC_INIT_GNU
 
 config STATIC_INIT_GNU
 	bool "Support GNU-compatible initializers and constructors"
-	default y if CPP || NATIVE_BUILD || COVERAGE
+	default y if CPP || NATIVE_LIBRARY || COVERAGE
 	depends on TOOLCHAIN_SUPPORTS_STATIC_INIT_GNU
 	depends on !CMAKE_LINKER_GENERATOR
 	help
@@ -1005,6 +997,31 @@ config STATIC_INIT_GNU
 	  and has instead separate C++ constructor initialization code.
 	  Note the option CMAKE_LINKER_GENERATOR does not yet support this feature
 	  or CPP.
+
+config BOOTARGS
+	bool "Support bootargs"
+	help
+	  Enables bootargs support and passing them to main().
+
+config DYNAMIC_BOOTARGS
+	bool "Support dynamic bootargs"
+	depends on BOOTARGS && (MULTIBOOT_INFO || BUILD_OUTPUT_EFI)
+	help
+	  Enables dynamic bootargs support.
+
+config BOOTARGS_STRING
+	string "static bootargs string"
+	depends on BOOTARGS && !DYNAMIC_BOOTARGS
+	help
+	  Static bootargs string. It includes argv[0], so if its expected that it
+	  contains executable name it should be put at the beginning of this string.
+
+config BOOTARGS_ARGS_BUFFER_SIZE
+	int "Size of buffer containing main arguments in bytes"
+	default 1024
+	depends on BOOTARGS
+	help
+	  Configures size of buffer containing all arguments passed to main.
 
 endmenu
 

@@ -11,6 +11,7 @@
 #include <zephyr/drivers/clock_control.h>
 #include <zephyr/drivers/reset.h>
 #include <zephyr/drivers/spi.h>
+#include <zephyr/drivers/spi/rtio.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/spinlock.h>
 #include <soc.h>
@@ -741,8 +742,9 @@ static void spi_pl022_xfer(const struct device *dev)
 	data->rx_count = 0;
 
 	/* Ensure writable */
-	while (!SSP_TX_FIFO_EMPTY(cfg->reg))
+	while (!SSP_TX_FIFO_EMPTY(cfg->reg)) {
 		;
+	}
 	/* Drain RX FIFO */
 	while (SSP_RX_FIFO_NOT_EMPTY(cfg->reg))
 		SSP_READ_REG(SSP_DR(cfg->reg));
@@ -762,8 +764,9 @@ static void spi_pl022_xfer(const struct device *dev)
 			fifo_cnt++;
 		}
 		while (data->rx_count < chunk_len && fifo_cnt > 0) {
-			if (!SSP_RX_FIFO_NOT_EMPTY(cfg->reg))
+			if (!SSP_RX_FIFO_NOT_EMPTY(cfg->reg)) {
 				continue;
+			}
 
 			txrx = SSP_READ_REG(SSP_DR(cfg->reg));
 
@@ -890,6 +893,9 @@ static const struct spi_driver_api spi_pl022_api = {
 	.transceive = spi_pl022_transceive,
 #if defined(CONFIG_SPI_ASYNC)
 	.transceive_async = spi_pl022_transceive_async,
+#endif
+#ifdef CONFIG_SPI_RTIO
+	.iodev_submit = spi_rtio_iodev_default_submit,
 #endif
 	.release = spi_pl022_release
 };

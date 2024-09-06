@@ -59,7 +59,7 @@ static int pool_id(struct net_buf_pool *pool)
 	return pool - TYPE_SECTION_START(net_buf_pool);
 }
 
-int net_buf_id(struct net_buf *buf)
+int net_buf_id(const struct net_buf *buf)
 {
 	struct net_buf_pool *pool = net_buf_pool_get(buf->pool_id);
 	size_t struct_size = ROUND_UP(sizeof(struct net_buf) + pool->user_data_size,
@@ -338,6 +338,7 @@ success:
 	buf->flags = 0U;
 	buf->frags = NULL;
 	buf->size  = size;
+	memset(buf->user_data, 0, buf->user_data_size);
 	net_buf_reset(buf);
 
 #if defined(CONFIG_NET_BUF_POOL_USAGE)
@@ -638,10 +639,10 @@ struct net_buf *net_buf_frag_del(struct net_buf *parent, struct net_buf *frag)
 	return next_frag;
 }
 
-size_t net_buf_linearize(void *dst, size_t dst_len, struct net_buf *src,
+size_t net_buf_linearize(void *dst, size_t dst_len, const struct net_buf *src,
 			 size_t offset, size_t len)
 {
-	struct net_buf *frag;
+	const struct net_buf *frag;
 	size_t to_copy;
 	size_t copied;
 

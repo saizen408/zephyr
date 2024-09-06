@@ -150,6 +150,8 @@ The Zephyr nucleo_h563zi board configuration supports the following hardware fea
 +===========+============+=====================================+
 | ADC       | on-chip    | ADC Controller                      |
 +-----------+------------+-------------------------------------+
+| BKP SRAM  | on-chip    | Backup SRAM                         |
++-----------+------------+-------------------------------------+
 | CAN/CANFD | on-chip    | CAN                                 |
 +-----------+------------+-------------------------------------+
 | CLOCK     | on-chip    | reset and clock control             |
@@ -240,12 +242,38 @@ Serial Port
 Nucleo H563ZI board has up to 12 U(S)ARTs. The Zephyr console output is assigned
 to USART3. Default settings are 115200 8N1.
 
+Backup SRAM
+-----------
+
+In order to test backup SRAM, you may want to disconnect VBAT from VDD_MCU.
+You can do it by removing ``SB55`` jumper on the back side of the board.
+VBAT can be provided via the left ST Morpho connector's pin 33.
+
 Programming and Debugging
 *************************
 
 Applications for the ``nucleo_h563zi`` board can be built and
 flashed in the usual way (see :ref:`build_an_application` and
 :ref:`application_run` for more details).
+
+OpenOCD Support
+===============
+
+For now, openocd support  for stm32h5 is not available on upstream OpenOCD.
+You can check `OpenOCD official Github mirror`_.
+In order to use it though, you should clone from the cutomized
+`STMicroelectronics OpenOCD Github`_ and compile it following usual README guidelines.
+Once it is done, you can set the OPENOCD and OPENOCD_DEFAULT_PATH variables in
+:zephyr_file:`boards/st/nucleo_h563zi/board.cmake` to point the build
+to the paths of the OpenOCD binary and its scripts,  before
+including the common openocd.board.cmake file:
+
+   .. code-block:: none
+
+      set(OPENOCD "<path_to_openocd_repo>/src/openocd" CACHE FILEPATH "" FORCE)
+      set(OPENOCD_DEFAULT_PATH <path_to_opneocd_repo>/tcl)
+      include(${ZEPHYR_BASE}/boards/common/openocd.board.cmake)
+
 
 Flashing
 ========
@@ -267,6 +295,10 @@ This can be done by executing the following commands.
 
    $ pyocd pack --update
    $ pyocd pack --install stm32h5
+
+
+Alternatively, the openocd interface will be supported by a next openocd version.
+When available, OpenOCD could be used in the same way as other tools.
 
 
 Flashing an application to Nucleo H563ZI
@@ -320,3 +352,9 @@ You can debug an application in the usual way.  Here is an example for the
 
 .. _STM32CubeProgrammer:
    https://www.st.com/en/development-tools/stm32cubeprog.html
+
+.. _OpenOCD official Github mirror:
+   https://github.com/openocd-org/openocd/
+
+.. _STMicroelectronics OpenOCD Github:
+   https://github.com/STMicroelectronics/OpenOCD/tree/openocd-cubeide-r6

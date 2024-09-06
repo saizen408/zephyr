@@ -28,7 +28,7 @@ LOG_MODULE_DECLARE(llext, CONFIG_LLEXT_LOG_LEVEL);
 __weak int arch_elf_relocate(elf_rela_t *rel, uintptr_t loc,
 			     uintptr_t sym_base_addr, const char *sym_name, uintptr_t load_bias)
 {
-	return -EOPNOTSUPP;
+	return -ENOTSUP;
 }
 
 __weak void arch_elf_relocate_local(struct llext_loader *ldr, struct llext *ext,
@@ -37,8 +37,8 @@ __weak void arch_elf_relocate_local(struct llext_loader *ldr, struct llext *ext,
 }
 
 /*
- * Find the section containing the supplied offset and return file offset for
- * that value
+ * Find the memory region containing the supplied offset and return the
+ * corresponding file offset
  */
 static size_t llext_file_offset(struct llext_loader *ldr, size_t offset)
 {
@@ -50,6 +50,86 @@ static size_t llext_file_offset(struct llext_loader *ldr, size_t offset)
 			return offset - ldr->sects[i].sh_addr + ldr->sects[i].sh_offset;
 
 	return offset;
+}
+
+/*
+ * We increment use-count every time a new dependent is added, and have to
+ * decrement it again, when one is removed. Ideally we should be able to add
+ * arbitrary numbers of dependencies, but using lists for this doesn't work,
+ * because multiple extensions can have common dependencies. Dynamically
+ * allocating dependency entries would be too wasteful. In this initial
+ * implementation we use an array of dependencies, if at some point we run out
+ * of array entries, we'll implement re-allocation.
+ * We add dependencies incrementally as we discover them, but we only ever
+ * expect them to be removed all at once, when their user is removed. So the
+ * dependency array is always "dense" - it cannot have NULL entries between
+ * valid ones.
+ */
+static int llext_dependency_add(struct llext *ext, struct llext *dependency)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(ext->dependency); i++) {
+		if (ext->dependency[i] == dependency) {
+			return 0;
+		}
+
+		if (!ext->dependency[i]) {
+			ext->dependency[i] = dependency;
+			dependency->use_count++;
+
+			return 0;
+		}
+	}
+
+	return -ENOENT;
+}
+
+void llext_dependency_remove_all(struct llext *ext)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(ext->dependency) && ext->dependency[i]; i++) {
+		/*
+		 * The use-count of dependencies is tightly bound to dependent's
+		 * life cycle, so it shouldn't underrun.
+		 */
+		ext->dependency[i]->use_count--;
+		__ASSERT(ext->dependency[i]->use_count, "LLEXT dependency use-count underrun!");
+		/* No need to NULL-ify the pointer - ext is freed after this */
+	}
+}
+
+struct llext_extension_sym {
+	struct llext *ext;
+	const char *sym;
+	const void *addr;
+};
+
+static int llext_find_extension_sym_iterate(struct llext *ext, void *arg)
+{
+	struct llext_extension_sym *se = arg;
+	const void *addr = llext_find_sym(&ext->exp_tab, se->sym);
+
+	if (addr) {
+		se->addr = addr;
+		se->ext = ext;
+		return 1;
+	}
+
+	return 0;
+}
+
+static const void *llext_find_extension_sym(const char *sym_name, struct llext **ext)
+{
+	struct llext_extension_sym se = {.sym = sym_name};
+
+	llext_iterate(llext_find_extension_sym_iterate, &se);
+	if (ext) {
+		*ext = se.ext;
+	}
+
+	return se.addr;
 }
 
 static void llext_link_plt(struct llext_loader *ldr, struct llext *ext,
@@ -141,11 +221,24 @@ static void llext_link_plt(struct llext_loader *ldr, struct llext *ext,
 
 		switch (stb) {
 		case STB_GLOBAL:
+			/* First try the global symbol table */
 			link_addr = llext_find_sym(NULL,
 				SYM_NAME_OR_SLID(name, sym_tbl.st_value));
 
-			if (!link_addr)
+			if (!link_addr) {
+				/* Next try internal tables */
 				link_addr = llext_find_sym(&ext->sym_tab, name);
+			}
+
+			if (!link_addr) {
+				/* Finally try any loaded tables */
+				struct llext *dep;
+
+				link_addr = llext_find_extension_sym(name, &dep);
+				if (link_addr) {
+					llext_dependency_add(ext, dep);
+				}
+			}
 
 			if (!link_addr) {
 				LOG_WRN("PLT: cannot find idx %u name %s", j, name);
@@ -239,17 +332,17 @@ int llext_link(struct llext_loader *ldr, struct llext *ext, bool do_local)
 			continue;
 		}
 
+		LOG_DBG("relocation section %s (%d) acting on section %d has %zd relocations",
+			name, i, shdr->sh_info, (size_t)rel_cnt);
+
 		enum llext_mem mem_idx = ldr->sect_map[shdr->sh_info].mem_idx;
 
 		if (mem_idx == LLEXT_MEM_COUNT) {
-			LOG_ERR("Section %d has no corresponding memory region", shdr->sh_info);
+			LOG_ERR("Section %d not loaded in any memory region", shdr->sh_info);
 			return -ENOEXEC;
 		}
 
 		sect_base = (uintptr_t)llext_loaded_sect_ptr(ldr, ext, shdr->sh_info);
-
-		LOG_DBG("relocation section %s (%d) acting on section %d has %zd relocations",
-			name, i, shdr->sh_info, (size_t)rel_cnt);
 
 		for (int j = 0; j < rel_cnt; j++) {
 			/* get each relocation entry */
@@ -295,6 +388,16 @@ int llext_link(struct llext_loader *ldr, struct llext *ext, bool do_local)
 				/* If symbol is undefined, then we need to look it up */
 				link_addr = (uintptr_t)llext_find_sym(NULL,
 					SYM_NAME_OR_SLID(name, sym.st_value));
+
+				if (link_addr == 0) {
+					/* Try loaded tables */
+					struct llext *dep;
+
+					link_addr = (uintptr_t)llext_find_extension_sym(name, &dep);
+					if (link_addr) {
+						llext_dependency_add(ext, dep);
+					}
+				}
 
 				if (link_addr == 0) {
 					LOG_ERR("Undefined symbol with no entry in "
@@ -353,7 +456,7 @@ int llext_link(struct llext_loader *ldr, struct llext *ext, bool do_local)
 	}
 
 #ifdef CONFIG_CACHE_MANAGEMENT
-	/* Make sure changes to ext sections are flushed to RAM */
+	/* Make sure changes to memory regions are flushed to RAM */
 	for (i = 0; i < LLEXT_MEM_COUNT; ++i) {
 		if (ext->mem[i]) {
 			sys_cache_data_flush_range(ext->mem[i], ext->mem_size[i]);

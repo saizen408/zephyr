@@ -23,6 +23,8 @@ extern "C" {
 /**
  * @brief Network buffer library
  * @defgroup net_buf Network Buffer Library
+ * @since 1.0
+ * @version 1.0.0
  * @ingroup networking
  * @{
  */
@@ -900,7 +902,7 @@ uint64_t net_buf_simple_pull_be64(struct net_buf_simple *buf);
  *
  * @return Tail pointer for the buffer.
  */
-static inline uint8_t *net_buf_simple_tail(struct net_buf_simple *buf)
+static inline uint8_t *net_buf_simple_tail(const struct net_buf_simple *buf)
 {
 	return buf->data + buf->len;
 }
@@ -914,7 +916,7 @@ static inline uint8_t *net_buf_simple_tail(struct net_buf_simple *buf)
  *
  * @return Number of bytes available in the beginning of the buffer.
  */
-size_t net_buf_simple_headroom(struct net_buf_simple *buf);
+size_t net_buf_simple_headroom(const struct net_buf_simple *buf);
 
 /**
  * @brief Check buffer tailroom.
@@ -925,7 +927,7 @@ size_t net_buf_simple_headroom(struct net_buf_simple *buf);
  *
  * @return Number of bytes available at the end of the buffer.
  */
-size_t net_buf_simple_tailroom(struct net_buf_simple *buf);
+size_t net_buf_simple_tailroom(const struct net_buf_simple *buf);
 
 /**
  * @brief Check maximum net_buf_simple::len value.
@@ -936,7 +938,7 @@ size_t net_buf_simple_tailroom(struct net_buf_simple *buf);
  *
  * @return Number of bytes usable behind the net_buf_simple::data pointer.
  */
-uint16_t net_buf_simple_max_len(struct net_buf_simple *buf);
+uint16_t net_buf_simple_max_len(const struct net_buf_simple *buf);
 
 /**
  * @brief Parsing state of a buffer.
@@ -960,7 +962,7 @@ struct net_buf_simple_state {
  * @param buf Buffer from which the state should be saved.
  * @param state Storage for the state.
  */
-static inline void net_buf_simple_save(struct net_buf_simple *buf,
+static inline void net_buf_simple_save(const struct net_buf_simple *buf,
 				       struct net_buf_simple_state *state)
 {
 	state->offset = (uint16_t)net_buf_simple_headroom(buf);
@@ -1047,7 +1049,7 @@ struct net_buf {
 		/** @endcond */
 	};
 
-	/** System metadata for this buffer. */
+	/** System metadata for this buffer. Cleared on allocation. */
 	uint8_t user_data[] __net_buf_align;
 };
 
@@ -1318,7 +1320,7 @@ struct net_buf_pool *net_buf_pool_get(int id);
  *
  * @return Zero-based index for the buffer.
  */
-int net_buf_id(struct net_buf *buf);
+int net_buf_id(const struct net_buf *buf);
 
 /**
  * @brief Allocate a new fixed buffer from a pool.
@@ -1435,8 +1437,7 @@ struct net_buf * __must_check net_buf_alloc_with_data(struct net_buf_pool *pool,
 /**
  * @brief Get a buffer from a FIFO.
  *
- * This function is NOT thread-safe if the buffers in the FIFO contain
- * fragments.
+ * @deprecated Use @a k_fifo_get() instead.
  *
  * @param fifo Which FIFO to take the buffer from.
  * @param timeout Affects the action taken should the FIFO be empty.
@@ -1446,14 +1447,14 @@ struct net_buf * __must_check net_buf_alloc_with_data(struct net_buf_pool *pool,
  * @return New buffer or NULL if the FIFO is empty.
  */
 #if defined(CONFIG_NET_BUF_LOG)
-struct net_buf * __must_check net_buf_get_debug(struct k_fifo *fifo,
-						k_timeout_t timeout,
-						const char *func, int line);
+__deprecated struct net_buf * __must_check net_buf_get_debug(struct k_fifo *fifo,
+							     k_timeout_t timeout,
+							     const char *func, int line);
 #define	net_buf_get(_fifo, _timeout) \
 	net_buf_get_debug(_fifo, _timeout, __func__, __LINE__)
 #else
-struct net_buf * __must_check net_buf_get(struct k_fifo *fifo,
-					  k_timeout_t timeout);
+__deprecated struct net_buf * __must_check net_buf_get(struct k_fifo *fifo,
+						       k_timeout_t timeout);
 #endif
 
 /**
@@ -1501,9 +1502,6 @@ void net_buf_simple_reserve(struct net_buf_simple *buf, size_t reserve);
 /**
  * @brief Put a buffer into a list
  *
- * If the buffer contains follow-up fragments this function will take care of
- * inserting them as well into the list.
- *
  * @param list Which list to append the buffer to.
  * @param buf Buffer.
  */
@@ -1511,9 +1509,6 @@ void net_buf_slist_put(sys_slist_t *list, struct net_buf *buf);
 
 /**
  * @brief Get a buffer from a list.
- *
- * If the buffer had any fragments, these will automatically be recovered from
- * the list as well and be placed to the buffer's fragment list.
  *
  * @param list Which list to take the buffer from.
  *
@@ -1524,13 +1519,12 @@ struct net_buf * __must_check net_buf_slist_get(sys_slist_t *list);
 /**
  * @brief Put a buffer to the end of a FIFO.
  *
- * If the buffer contains follow-up fragments this function will take care of
- * inserting them as well into the FIFO.
+ * @deprecated Use @a k_fifo_put() instead.
  *
  * @param fifo Which FIFO to put the buffer to.
  * @param buf Buffer.
  */
-void net_buf_put(struct k_fifo *fifo, struct net_buf *buf);
+__deprecated void net_buf_put(struct k_fifo *fifo, struct net_buf *buf);
 
 /**
  * @brief Decrements the reference count of a buffer.
@@ -2499,7 +2493,7 @@ static inline uint64_t net_buf_pull_be64(struct net_buf *buf)
  *
  * @return Number of bytes available at the end of the buffer.
  */
-static inline size_t net_buf_tailroom(struct net_buf *buf)
+static inline size_t net_buf_tailroom(const struct net_buf *buf)
 {
 	return net_buf_simple_tailroom(&buf->b);
 }
@@ -2513,7 +2507,7 @@ static inline size_t net_buf_tailroom(struct net_buf *buf)
  *
  * @return Number of bytes available in the beginning of the buffer.
  */
-static inline size_t net_buf_headroom(struct net_buf *buf)
+static inline size_t net_buf_headroom(const struct net_buf *buf)
 {
 	return net_buf_simple_headroom(&buf->b);
 }
@@ -2527,7 +2521,7 @@ static inline size_t net_buf_headroom(struct net_buf *buf)
  *
  * @return Number of bytes usable behind the net_buf::data pointer.
  */
-static inline uint16_t net_buf_max_len(struct net_buf *buf)
+static inline uint16_t net_buf_max_len(const struct net_buf *buf)
 {
 	return net_buf_simple_max_len(&buf->b);
 }
@@ -2541,7 +2535,7 @@ static inline uint16_t net_buf_max_len(struct net_buf *buf)
  *
  * @return Tail pointer for the buffer.
  */
-static inline uint8_t *net_buf_tail(struct net_buf *buf)
+static inline uint8_t *net_buf_tail(const struct net_buf *buf)
 {
 	return net_buf_simple_tail(&buf->b);
 }
@@ -2617,7 +2611,7 @@ struct net_buf *net_buf_frag_del(struct net_buf *parent, struct net_buf *frag);
  * @return number of bytes actually copied
  */
 size_t net_buf_linearize(void *dst, size_t dst_len,
-			 struct net_buf *src, size_t offset, size_t len);
+			 const struct net_buf *src, size_t offset, size_t len);
 
 /**
  * @typedef net_buf_allocator_cb
@@ -2714,7 +2708,7 @@ static inline struct net_buf *net_buf_skip(struct net_buf *buf, size_t len)
  *
  * @return Number of bytes in the buffer and its fragments.
  */
-static inline size_t net_buf_frags_len(struct net_buf *buf)
+static inline size_t net_buf_frags_len(const struct net_buf *buf)
 {
 	size_t bytes = 0;
 

@@ -30,7 +30,6 @@ macro(configure_linker_script linker_script_gen linker_pass_define)
   endif()
 
   zephyr_get_include_directories_for_lang(C current_includes)
-  get_property(current_defines GLOBAL PROPERTY PROPERTY_LINKER_SCRIPT_DEFINES)
 
 # the command to generate linker file from template
   add_custom_command(
@@ -48,9 +47,9 @@ macro(configure_linker_script linker_script_gen linker_pass_define)
     -MD -MF ${linker_script_gen}.dep -MT ${linker_script_gen}
     -D_LINKER
     -D_ASMLANGUAGE
+    -D__MWDT_LINKER_CMD__
     -imacros ${AUTOCONF_H}
     ${current_includes}
-    ${current_defines}
     ${template_script_defines}
     ${LINKER_SCRIPT}
     -E
@@ -111,65 +110,10 @@ endfunction(toolchain_ld_link_elf)
 
 # linker options of temporary linkage for code generation
 macro(toolchain_ld_baremetal)
-  zephyr_ld_options(
-    -Hlld
-    -Hnosdata
-    -Xtimer0 # to suppress the warning message
-    -Hnoxcheck_obj
-    -Hnocplus
-    -Hhostlib=
-    -Hheap=0
-    -Hnoivt
-    -Hnocrt
-  )
-
-  # There are two options:
-  # - We have full MWDT libc support and we link MWDT libc - this is default
-  #   behavior and we don't need to do something for that.
-  # - We use minimal libc provided by Zephyr itself. In that case we must not
-  #   link MWDT libc, but we still need to link libmw
-  if(CONFIG_MINIMAL_LIBC)
-    zephyr_ld_options(
-      -Hnolib
-      -Hldopt=-lmw
-    )
-  endif()
-
-  # Funny thing is if this is set to =error, some architectures will
-  # skip this flag even though the compiler flag check passes
-  # (e.g. ARC and Xtensa). So warning should be the default for now.
-  #
-  # Skip this for native application as Zephyr only provides
-  # additions to the host toolchain linker script. The relocation
-  # sections (.rel*) requires us to override those provided
-  # by host toolchain. As we can't account for all possible
-  # combination of compiler and linker on all machines used
-  # for development, it is better to turn this off.
-  #
-  # CONFIG_LINKER_ORPHAN_SECTION_PLACE is to place the orphan sections
-  # without any warnings or errors, which is the default behavior.
-  # So there is no need to explicitly set a linker flag.
-  if(CONFIG_LINKER_ORPHAN_SECTION_WARN)
-    message(WARNING "MWDT toolchain does not support
-           CONFIG_LINKER_ORPHAN_SECTION_WARN")
-  elseif(CONFIG_LINKER_ORPHAN_SECTION_ERROR)
-    zephyr_ld_options(
-      ${LINKERFLAGPREFIX}--orphan-handling=error)
-  endif()
 endmacro()
 
 # base linker options
 macro(toolchain_ld_base)
-  if(NOT PROPERTY_LINKER_SCRIPT_DEFINES)
-    set_property(GLOBAL PROPERTY PROPERTY_LINKER_SCRIPT_DEFINES -D__MWDT_LINKER_CMD__)
-  endif()
-
-  # Sort the common symbols and each input section by alignment
-  # in descending order to minimize padding between these symbols.
-  zephyr_ld_option_ifdef(
-    CONFIG_LINKER_SORT_BY_ALIGNMENT
-    ${LINKERFLAGPREFIX}--sort-section=alignment
-  )
 endmacro()
 
 # generate linker script snippets from configure files
@@ -193,9 +137,6 @@ endmacro()
 
 # link C++ libraries
 macro(toolchain_ld_cpp)
-  zephyr_link_libraries(
-    -Hcplus
-  )
 endmacro()
 
 # use linker for relocation

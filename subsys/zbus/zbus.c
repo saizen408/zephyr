@@ -76,13 +76,7 @@ int _zbus_init(void)
 
 		++(curr->data->observers_end_idx);
 	}
-	STRUCT_SECTION_FOREACH(zbus_channel, chan) {
-		k_sem_init(&chan->data->sem, 1, 1);
 
-#if defined(CONFIG_ZBUS_RUNTIME_OBSERVERS)
-		sys_slist_init(&chan->data->observers);
-#endif /* CONFIG_ZBUS_RUNTIME_OBSERVERS */
-	}
 	return 0;
 }
 SYS_INIT(_zbus_init, APPLICATION, CONFIG_ZBUS_CHANNELS_SYS_INIT_PRIORITY);
@@ -107,7 +101,7 @@ static inline int _zbus_notify_observer(const struct zbus_channel *chan,
 			return -ENOMEM;
 		}
 
-		net_buf_put(obs->message_fifo, cloned_buf);
+		k_fifo_put(obs->message_fifo, cloned_buf);
 
 		break;
 	}
@@ -236,15 +230,7 @@ static inline void chan_update_hop(const struct zbus_channel *chan)
 
 static inline void update_all_channels_hop(const struct zbus_observer *obs)
 {
-	struct zbus_channel_observation *observation;
-
-	int count;
-
-	STRUCT_SECTION_COUNT(zbus_channel_observation, &count);
-
-	for (int16_t i = 0; i < count; ++i) {
-		STRUCT_SECTION_GET(zbus_channel_observation, i, &observation);
-
+	STRUCT_SECTION_FOREACH(zbus_channel_observation, observation) {
 		if (obs != observation->obs) {
 			continue;
 		}
@@ -478,7 +464,7 @@ int zbus_sub_wait_msg(const struct zbus_observer *sub, const struct zbus_channel
 	_ZBUS_ASSERT(chan != NULL, "chan is required");
 	_ZBUS_ASSERT(msg != NULL, "msg is required");
 
-	struct net_buf *buf = net_buf_get(sub->message_fifo, timeout);
+	struct net_buf *buf = k_fifo_get(sub->message_fifo, timeout);
 
 	if (buf == NULL) {
 		return -ENOMSG;
@@ -565,7 +551,7 @@ int zbus_obs_is_chan_notification_masked(const struct zbus_observer *obs,
 	return err;
 }
 
-int zbus_obs_set_enable(struct zbus_observer *obs, bool enabled)
+int zbus_obs_set_enable(const struct zbus_observer *obs, bool enabled)
 {
 	_ZBUS_ASSERT(obs != NULL, "obs is required");
 

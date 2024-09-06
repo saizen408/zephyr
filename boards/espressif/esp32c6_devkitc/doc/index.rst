@@ -100,6 +100,12 @@ Current Zephyr's ESP32-C6-DevKitC board supports the following features:
 +------------+------------+-------------------------------------+
 | SPI DMA    | on-chip    | spi                                 |
 +------------+------------+-------------------------------------+
+| GDMA       | on-chip    | dma                                 |
++------------+------------+-------------------------------------+
+| TRNG       | on-chip    | entropy                             |
++------------+------------+-------------------------------------+
+| USB-CDC    | on-chip    | serial                              |
++------------+------------+-------------------------------------+
 
 System requirements
 *******************
@@ -135,7 +141,7 @@ MCUboot bootloader
 ==================
 
 User may choose to use MCUboot bootloader instead. In that case the bootloader
-must be build (and flash) at least once.
+must be built (and flashed) at least once.
 
 There are two options to be used when building an application:
 
@@ -146,9 +152,10 @@ There are two options to be used when building an application:
 
    User can select the MCUboot bootloader by adding the following line
    to the board default configuration file.
-   ```
-   CONFIG_BOOTLOADER_MCUBOOT=y
-   ```
+
+   .. code:: cfg
+
+      CONFIG_BOOTLOADER_MCUBOOT=y
 
 Sysbuild
 ========
@@ -160,7 +167,7 @@ To build the sample application using sysbuild use the command:
 
 .. zephyr-app-commands::
    :tool: west
-   :app: samples/hello_world
+   :zephyr-app: samples/hello_world
    :board: esp32c6_devkitc
    :goals: build
    :west-args: --sysbuild
@@ -196,7 +203,7 @@ Manual build
 ============
 
 During the development cycle, it is intended to build & flash as quickly possible.
-For that reason, images can be build one at a time using traditional build.
+For that reason, images can be built one at a time using traditional build.
 
 The instructions following are relevant for both manual build and sysbuild.
 The only difference is the structure of the build directory.

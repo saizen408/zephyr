@@ -206,7 +206,7 @@ static int mcux_lpc_syscon_clock_control_get_subsys_rate(
 
 #if (defined(FSL_FEATURE_SOC_USDHC_COUNT) && FSL_FEATURE_SOC_USDHC_COUNT)
 
-#if CONFIG_SOC_FAMILY_NXP_MCX
+#if CONFIG_SOC_SERIES_MCXN
 	case MCUX_USDHC1_CLK:
 		*rate = CLOCK_GetUsdhcClkFreq();
 		break;
@@ -358,6 +358,12 @@ static int mcux_lpc_syscon_clock_control_get_subsys_rate(
 		*rate = CLOCK_GetFlexioClkFreq();
 		break;
 #endif /* defined(CONFIG_MCUX_FLEXIO) */
+
+#if defined(CONFIG_I2S_MCUX_FLEXCOMM)
+	case MCUX_AUDIO_MCLK:
+		*rate = CLOCK_GetMclkClkFreq();
+		break;
+#endif /* defined(CONFIG_I2S_MCUX_FLEXCOMM) */
 	}
 
 	return 0;
