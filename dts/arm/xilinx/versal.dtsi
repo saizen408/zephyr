@@ -1,0 +1,86 @@
+/*
+ * Copyright (c) 2019 Lexmark International, Inc.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <mem.h>
+#include <arm/armv7-r.dtsi>
+#include <zephyr/dt-bindings/interrupt-controller/arm-gic.h>
+#include <zephyr/dt-bindings/ethernet/xlnx_gem.h>
+
+/ {
+	soc {
+		/* Split Config: TCM_A */
+		sram0: memory@0 {
+			compatible = "mmio-sram";
+			reg = <0x0 DT_SIZE_K(128)>;
+		};
+		
+		ddr4: memory@3ed00000 {
+			status = "okay";
+			device_type = "memory";
+			compatible = "zephyr,memory-region";
+			reg = <0x3ed00000 DT_SIZE_M(128)>;
+			zephyr,memory-region = "DDR4";
+		};
+
+		flash0: flash@c0000000 {
+			compatible = "soc-nv-flash";
+			reg = <0xc0000000 DT_SIZE_M(32)>;
+		};
+
+		ttc0: timer@ff0e0000 {
+			compatible = "xlnx,ttcps";
+			status = "disabled";
+			interrupts = <GIC_SPI 37 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>,
+				     <GIC_SPI 38 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>,
+				     <GIC_SPI 39 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>;
+			interrupt-names = "irq_0", "irq_1", "irq_2";
+			reg = <0xff0e0000 0x1000>;
+		};
+
+		ttc1: timer@ff0f0000 {
+			compatible = "xlnx,ttcps";
+			status = "disabled";
+			interrupts = <GIC_SPI 40 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>,
+				     <GIC_SPI 41 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>,
+				     <GIC_SPI 42 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>;
+			interrupt-names = "irq_0", "irq_1", "irq_2";
+			reg = <0xff0f0000 0x1000>;
+		};
+
+		ttc2: timer@ff100000 {
+			compatible = "xlnx,ttcps";
+			status = "disabled";
+			interrupts = <GIC_SPI 43 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>,
+				     <GIC_SPI 44 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>,
+				     <GIC_SPI 45 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>;
+			interrupt-names = "irq_0", "irq_1", "irq_2";
+			reg = <0xff100000 0x1000>;
+		};
+
+		ttc3: timer@ff110000 {
+			compatible = "xlnx,ttcps";
+			status = "disabled";
+			interrupts = <GIC_SPI 46 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>,
+				     <GIC_SPI 47 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>,
+				     <GIC_SPI 48 IRQ_TYPE_EDGE
+					IRQ_DEFAULT_PRIORITY>;
+			interrupt-names = "irq_0", "irq_1", "irq_2";
+			reg = <0xff110000 0x1000>;
+		};
+	};
+
+};

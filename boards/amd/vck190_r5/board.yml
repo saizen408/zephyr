@@ -1,0 +1,5 @@
+board:
+  name: vck190_r5
+  vendor: amd
+  socs:
+  - name: zynqmp_rpu

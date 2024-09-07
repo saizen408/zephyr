@@ -24,7 +24,8 @@
 #else
   #define ROMABLE_REGION RAM
 #endif
-#define RAMABLE_REGION RAM
+#define RAMABLE_REGION DDR4
+
 
 #if !defined(CONFIG_XIP) && (CONFIG_FLASH_SIZE == 0)
   #define ROM_ADDR RAM_ADDR
@@ -163,7 +164,7 @@ SECTIONS
 
         __text_region_end = .;
         . = ALIGN(_region_min_align);
-    } GROUP_LINK_IN(ROMABLE_REGION)
+    } GROUP_LINK_IN(RAMABLE_REGION)
 
 #if defined (CONFIG_CPP)
     SECTION_PROLOGUE(.ARM.extab,,)
