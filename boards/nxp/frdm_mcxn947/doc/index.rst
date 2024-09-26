@@ -190,7 +190,7 @@ Connect a USB cable from your PC to J17, and use the serial terminal of your cho
 Flashing
 ========
 
-Here is an example for the :ref:`hello_world` application.
+Here is an example for the :zephyr:code-sample:`hello_world` application.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/hello_world
@@ -208,11 +208,12 @@ see the following message in the terminal:
 Flashing to QSPI
 ================
 
-Here is an example for the :ref:`hello_world` application.
+Here is an example for the :zephyr:code-sample:`hello_world` application.
 
 .. zephyr-app-commands::
-   :zephyr-app: zephyr/samples/hello_world -DCONFIG_MCUBOOT_SIGNATURE_KEY_FILE=\"bootloader/mcuboot/root-rsa-2048.pem\" -DCONFIG_BOOTLOADER_MCUBOOT=y
+   :app: zephyr/samples/hello_world
    :board: frdm_mcxn947/mcxn947/cpu0/qspi
+   :gen-args: -DCONFIG_MCUBOOT_SIGNATURE_KEY_FILE=\"bootloader/mcuboot/root-rsa-2048.pem\" -DCONFIG_BOOTLOADER_MCUBOOT=y
    :goals: flash
 
 
@@ -220,7 +221,7 @@ In order to load Zephyr application from QSPI you should program a bootloader li
 MCUboot bootloader to internal flash. Here are the steps.
 
 .. zephyr-app-commands::
-   :zephyr-app: bootloader/mcuboot/boot/zephyr
+   :app: bootloader/mcuboot/boot/zephyr
    :board: frdm_mcxn947/mcxn947/cpu0/qspi
    :goals: flash
 
@@ -244,7 +245,7 @@ see the following message in the terminal:
 Debugging
 =========
 
-Here is an example for the :ref:`hello_world` application.
+Here is an example for the :zephyr:code-sample:`hello_world` application.
 
 .. zephyr-app-commands::
    :zephyr-app: samples/hello_world

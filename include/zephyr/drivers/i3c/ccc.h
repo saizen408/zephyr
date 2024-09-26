@@ -451,6 +451,9 @@ struct i3c_ccc_deftgts_target {
  * this CCC.
  */
 struct i3c_ccc_deftgts {
+	/** Number of Targets (and Groups) present on the I3C Bus */
+	uint8_t count;
+
 	/** Data describing the active controller */
 	struct i3c_ccc_deftgts_active_controller active_controller;
 
@@ -493,7 +496,7 @@ struct i3c_ccc_address {
 	 * - For GETACCCR, the correct address of Secondary
 	 *   Controller.
 	 *
-	 * @note For SETDATA, SETNEWDA and SETGRAP,
+	 * @note For SETDATA, SETNEWDA and SETGRPA,
 	 * the address is left-shift by 1, and bit[0] is always 0.
 	 *
 	 * @note Fpr SET GETACCCR, the address is left-shift by 1,
@@ -679,9 +682,39 @@ struct i3c_ccc_setbrgtgt {
 } __packed;
 
 /**
+ * @brief Indicate which format of getmxds to use.
+ */
+enum i3c_ccc_getmxds_fmt {
+	/** GETMXDS Format 1 */
+	GETMXDS_FORMAT_1,
+
+	/** GETMXDS Format 2 */
+	GETMXDS_FORMAT_2,
+
+	/** GETMXDS Format 3 */
+	GETMXDS_FORMAT_3,
+};
+
+/**
+ * @brief Enum for I3C Get Max Data Speed (GETMXDS) Format 3 Defining Byte Values.
+ */
+enum i3c_ccc_getmxds_defbyte {
+	/** Standard Target Write/Read speed parameters, and optional Maximum Read Turnaround Time
+	 */
+	GETMXDS_FORMAT_3_WRRDTURN = 0x00U,
+
+	/** Delay parameters for a Controller-capable Device, and it's expected Activity State
+	 * during a Controller Handoff
+	 */
+	GETMXDS_FORMAT_3_CRHDLY = 0x91U,
+
+	/** Invalid defining byte. */
+	GETMXDS_FORMAT_3_INVALID = 0x100,
+};
+
+
+/**
  * @brief Payload for GETMXDS CCC (Get Max Data Speed).
- *
- * @note This is only for GETMXDS Format 1 and Format 2.
  */
 union i3c_ccc_getmxds {
 	struct {
@@ -713,7 +746,7 @@ union i3c_ccc_getmxds {
 		 *
 		 * @see i3c_ccc_getmxds::fmt2
 		 */
-		uint8_t wrrdturn;
+		uint8_t wrrdturn[5];
 
 		/**
 		 * Defining Byte 0x91: CRHDLY
@@ -1224,6 +1257,18 @@ enum i3c_ccc_rstact_defining_byte {
 
 	/** Virtual Target Detect. */
 	I3C_CCC_RSTACT_VIRTUAL_TARGET_DETECT = 0x04U,
+
+	/** Return Time to Reset Peripheral */
+	I3C_CCC_RSTACT_RETURN_TIME_TO_RESET_PERIPHERAL = 0x81U,
+
+	/** Return Time to Reset Whole Target */
+	I3C_CCC_RSTACT_RETURN_TIME_TO_WHOLE_TARGET = 0x82U,
+
+	/** Return Time for Debug Network Adapter Reset */
+	I3C_CCC_RSTACT_RETURN_TIME_FOR_DEBUG_NETWORK_ADAPTER_RESET = 0x83U,
+
+	/** Return Virtual Target Indication */
+	I3C_CCC_RSTACT_RETURN_VIRTUAL_TARGET_INDICATION = 0x84U,
 };
 
 /**
@@ -1284,10 +1329,10 @@ int i3c_ccc_do_getpid(struct i3c_device_desc *target,
 		      struct i3c_ccc_getpid *pid);
 
 /**
- * @brief Broadcast RSTACT to reset I3C Peripheral.
+ * @brief Broadcast RSTACT to reset I3C Peripheral (Format 1).
  *
  * Helper function to broadcast Target Reset Action (RSTACT) to
- * all connected targets to Reset the I3C Peripheral Only (0x01).
+ * all connected targets.
  *
  * @param[in] controller Pointer to the controller device driver instance.
  * @param[in] action What reset action to perform.
@@ -1296,6 +1341,60 @@ int i3c_ccc_do_getpid(struct i3c_device_desc *target,
  */
 int i3c_ccc_do_rstact_all(const struct device *controller,
 			  enum i3c_ccc_rstact_defining_byte action);
+
+/**
+ * @brief Single target RSTACT to reset I3C Peripheral.
+ *
+ * Helper function to do Target Reset Action (RSTACT) to
+ * one target.
+ *
+ * @param[in] target Pointer to the target device descriptor.
+ * @param[in] action What reset action to perform.
+ * @param[in] get True if a get, False if set
+ * @param[out] data Pointer to RSTACT payload received.
+ *
+ * @return @see i3c_do_ccc
+ */
+int i3c_ccc_do_rstact(const struct i3c_device_desc *target,
+			  enum i3c_ccc_rstact_defining_byte action,
+			  bool get,
+			  uint8_t *data);
+
+/**
+ * @brief Single target RSTACT to reset I3C Peripheral (Format 2).
+ *
+ * Helper function to do Target Reset Action (RSTACT, format 2) to
+ * one target. This is a Direct Write.
+ *
+ * @param[in] target Pointer to the target device descriptor.
+ * @param[in] action What reset action to perform.
+ *
+ * @return @see i3c_do_ccc
+ */
+static inline int i3c_ccc_do_rstact_fmt2(const struct i3c_device_desc *target,
+			  enum i3c_ccc_rstact_defining_byte action)
+{
+	return i3c_ccc_do_rstact(target, action, false, NULL);
+}
+
+/**
+ * @brief Single target RSTACT to reset I3C Peripheral (Format 3).
+ *
+ * Helper function to do Target Reset Action (RSTACT, format 3) to
+ * one target. This is a Direct Read.
+ *
+ * @param[in] target Pointer to the target device descriptor.
+ * @param[in] action What reset action to perform.
+ * @param[out] data Pointer to RSTACT payload received.
+ *
+ * @return @see i3c_do_ccc
+ */
+static inline int i3c_ccc_do_rstact_fmt3(const struct i3c_device_desc *target,
+			  enum i3c_ccc_rstact_defining_byte action,
+			  uint8_t *data)
+{
+	return i3c_ccc_do_rstact(target, action, true, data);
+}
 
 /**
  * @brief Broadcast RSTDAA to reset dynamic addresses for all targets.
@@ -1318,10 +1417,12 @@ int i3c_ccc_do_rstdaa_all(const struct device *controller);
  *
  * @param[in] target Pointer to the target device descriptor where
  *                   the device is configured with a static address.
+ * @param[in] da Struct of the Dynamic address
  *
  * @return @see i3c_do_ccc
  */
-int i3c_ccc_do_setdasa(const struct i3c_device_desc *target);
+int i3c_ccc_do_setdasa(const struct i3c_device_desc *target,
+			  struct i3c_ccc_address da);
 
 /**
  * @brief Set New Dynamic Address for a target
@@ -1332,7 +1433,7 @@ int i3c_ccc_do_setdasa(const struct i3c_device_desc *target);
  *
  * @param[in] target Pointer to the target device descriptor where
  *                   the device is configured with a static address.
- * @param[in] new_da Pointer to the new_da struct.
+ * @param[in] new_da Struct of the Dynamic address
  *
  * @return @see i3c_do_ccc
  */
@@ -1749,7 +1850,7 @@ static inline int i3c_ccc_do_getcaps_fmt2(const struct i3c_device_desc *target,
  *
  * @return @see i3c_do_ccc
  */
-int i3c_ccc_do_setvendor(struct i3c_device_desc *target,
+int i3c_ccc_do_setvendor(const struct i3c_device_desc *target,
 			uint8_t id,
 			uint8_t *payload,
 			size_t len);
@@ -1768,7 +1869,7 @@ int i3c_ccc_do_setvendor(struct i3c_device_desc *target,
  *
  * @return @see i3c_do_ccc
  */
-int i3c_ccc_do_getvendor(struct i3c_device_desc *target,
+int i3c_ccc_do_getvendor(const struct i3c_device_desc *target,
 			uint8_t id,
 			uint8_t *payload,
 			size_t len,
@@ -1790,7 +1891,7 @@ int i3c_ccc_do_getvendor(struct i3c_device_desc *target,
  *
  * @return @see i3c_do_ccc
  */
-int i3c_ccc_do_getvendor_defbyte(struct i3c_device_desc *target,
+int i3c_ccc_do_getvendor_defbyte(const struct i3c_device_desc *target,
 			uint8_t id,
 			uint8_t defbyte,
 			uint8_t *payload,
@@ -1826,6 +1927,96 @@ int i3c_ccc_do_setvendor_all(const struct device *controller,
  * @return @see i3c_do_ccc
  */
 int i3c_ccc_do_setaasa_all(const struct device *controller);
+
+/**
+ * @brief Single target GETMXDS to Get Max Data Speed.
+ *
+ * Helper function to do GETMXDS (Get Max Data Speed) of
+ * one target.
+ *
+ * This should only be supported if Max Data Speed Limit Bit of
+ * the BCR is set
+ *
+ * @param[in] target Pointer to the target device descriptor.
+ * @param[out] caps Pointer to GETMXDS payload.
+ * @param[in] fmt Which GETMXDS to use.
+ * @param[in] defbyte Defining Byte if using format 3.
+ *
+ * @return @see i3c_do_ccc
+ */
+int i3c_ccc_do_getmxds(const struct i3c_device_desc *target,
+			 union i3c_ccc_getmxds *caps,
+			 enum i3c_ccc_getmxds_fmt fmt,
+			 enum i3c_ccc_getmxds_defbyte defbyte);
+
+/**
+ * @brief Single target GETMXDS to Get Max Data Speed (Format 1).
+ *
+ * Helper function to do GETMXDS (Get Max Data Speed, format 1) of
+ * one target.
+ *
+ * @param[in] target Pointer to the target device descriptor.
+ * @param[out] caps Pointer to GETMXDS payload.
+ *
+ * @return @see i3c_do_ccc
+ */
+static inline int i3c_ccc_do_getmxds_fmt1(const struct i3c_device_desc *target,
+					    union i3c_ccc_getmxds *caps)
+{
+	return i3c_ccc_do_getmxds(target, caps,
+				    GETMXDS_FORMAT_1,
+				    GETMXDS_FORMAT_3_INVALID);
+}
+
+/**
+ * @brief Single target GETMXDS to Get Max Data Speed (Format 2).
+ *
+ * Helper function to do GETMXDS (Get Max Data Speed, format 2) of
+ * one target.
+ *
+ * @param[in] target Pointer to the target device descriptor.
+ * @param[out] caps Pointer to GETMXDS payload.
+ *
+ * @return @see i3c_do_ccc
+ */
+static inline int i3c_ccc_do_getmxds_fmt2(const struct i3c_device_desc *target,
+					    union i3c_ccc_getmxds *caps)
+{
+	return i3c_ccc_do_getmxds(target, caps,
+				    GETMXDS_FORMAT_2,
+					GETMXDS_FORMAT_3_INVALID);
+}
+
+/**
+ * @brief Single target GETMXDS to Get Max Data Speed (Format 3).
+ *
+ * Helper function to do GETMXDS (Get Max Data Speed, format 3) of
+ * one target.
+ *
+ * @param[in] target Pointer to the target device descriptor.
+ * @param[out] caps Pointer to GETMXDS payload.
+ * @param[in] defbyte Defining Byte for GETMXDS format 3.
+ *
+ * @return @see i3c_do_ccc
+ */
+static inline int i3c_ccc_do_getmxds_fmt3(const struct i3c_device_desc *target,
+					    union i3c_ccc_getmxds *caps,
+					    enum i3c_ccc_getmxds_defbyte defbyte)
+{
+	return i3c_ccc_do_getmxds(target, caps,
+				    GETMXDS_FORMAT_3, defbyte);
+}
+
+/**
+ * @brief Broadcast DEFTGTS
+ *
+ * @param[in] controller Pointer to the controller device driver instance.
+ * @param[in] deftgts Pointer to the deftgts payload.
+ *
+ * @return @see i3c_do_ccc
+ */
+int i3c_ccc_do_deftgts_all(const struct device *controller,
+			   struct i3c_ccc_deftgts *deftgts);
 
 #ifdef __cplusplus
 }

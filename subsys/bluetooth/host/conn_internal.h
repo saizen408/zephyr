@@ -62,6 +62,7 @@ enum {
 	BT_CONN_BR_NOBOND,                    /* SSP no bond pairing tracker */
 	BT_CONN_BR_PAIRING_INITIATOR,         /* local host starts authentication */
 	BT_CONN_CLEANUP,                      /* Disconnected, pending cleanup */
+	BT_CONN_AUTO_INIT_PROCEDURES_DONE,    /* Auto-initiated procedures have run */
 	BT_CONN_PERIPHERAL_PARAM_UPDATE,      /* If periph param update timer fired */
 	BT_CONN_PERIPHERAL_PARAM_AUTO_UPDATE, /* If periph param auto update on timer fired */
 	BT_CONN_PERIPHERAL_PARAM_SET,         /* If periph param were set from app */
@@ -490,6 +491,16 @@ void notify_path_loss_threshold_report(struct bt_conn *conn,
 
 void notify_subrate_change(struct bt_conn *conn,
 			   struct bt_conn_le_subrate_changed params);
+
+void notify_remote_cs_capabilities(struct bt_conn *conn,
+			   struct bt_conn_le_cs_capabilities params);
+
+void notify_remote_cs_fae_table(struct bt_conn *conn,
+			   struct bt_conn_le_cs_fae_table params);
+
+void notify_cs_config_created(struct bt_conn *conn, struct bt_conn_le_cs_config *params);
+
+void notify_cs_config_removed(struct bt_conn *conn, uint8_t config_id);
 
 #if defined(CONFIG_BT_SMP)
 /* If role specific LTK is present */

@@ -22,7 +22,7 @@
 #include <string.h>
 
 #include <zephyr/sys/util.h>
-#include <zephyr/net/buf.h>
+#include <zephyr/net_buf.h>
 #include <zephyr/bluetooth/gap.h>
 #include <zephyr/bluetooth/addr.h>
 #include <zephyr/bluetooth/crypto.h>
@@ -2065,7 +2065,7 @@ struct bt_le_scan_param {
 	uint8_t  type;
 
 	/** Bit-field of scanning options. */
-	uint32_t options;
+	uint8_t options;
 
 	/** Scan interval (N * 0.625 ms).
 	 *

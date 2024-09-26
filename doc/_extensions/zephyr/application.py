@@ -7,7 +7,10 @@
 from docutils import nodes
 from docutils.parsers.rst import Directive
 from docutils.parsers.rst import directives
+from pathlib import Path
 
+
+ZEPHYR_BASE = Path(__file__).parents[3]
 
 # TODO: extend and modify this for Windows.
 #
@@ -17,93 +20,6 @@ class ZephyrAppCommandsDirective(Directive):
     r'''
     This is a Zephyr directive for generating consistent documentation
     of the shell commands needed to manage (build, flash, etc.) an application.
-
-    For example, to generate commands to build samples/hello_world for
-    qemu_x86 use::
-
-       .. zephyr-app-commands::
-          :zephyr-app: samples/hello_world
-          :board: qemu_x86
-          :goals: build
-
-    Directive options:
-
-    \:tool:
-      which tool to use. Valid options are currently 'cmake', 'west' and 'all'.
-      The default is 'west'.
-
-    \:app:
-      path to the application to build.
-
-    \:zephyr-app:
-      path to the application to build, this is an app present in the upstream
-      zephyr repository. Mutually exclusive with \:app:.
-
-    \:cd-into:
-      if set, build instructions are given from within the \:app: folder,
-      instead of outside of it.
-
-    \:generator:
-      which build system to generate. Valid options are
-      currently 'ninja' and 'make'. The default is 'ninja'. This option
-      is not case sensitive.
-
-    \:host-os:
-      which host OS the instructions are for. Valid options are
-      'unix', 'win' and 'all'. The default is 'all'.
-
-    \:board:
-      if set, the application build will target the given board.
-
-    \:shield:
-      if set, the application build will target the given shield.
-      Multiple shields can be provided in a comma separated list.
-
-    \:conf:
-      if set, the application build will use the given configuration
-      file.  If multiple conf files are provided, enclose the
-      space-separated list of files with quotes, e.g., "a.conf b.conf".
-
-    \:gen-args:
-      if set, additional arguments to the CMake invocation
-
-    \:build-args:
-      if set, additional arguments to the build invocation
-
-    \:snippets:
-      if set, indicates the application should be compiled with the listed snippets.
-      Multiple snippets can be provided in a comma separated list.
-
-    \:build-dir:
-      if set, the application build directory will *APPEND* this
-      (relative, Unix-separated) path to the standard build directory. This is
-      mostly useful for distinguishing builds for one application within a
-      single page.
-
-    \:build-dir-fmt:
-      if set, assume that "west config build.dir-fmt" has been set to this
-      path. Exclusive with 'build-dir' and depends on 'tool=west'.
-
-    \:goals:
-      a whitespace-separated list of what to do with the app (in
-      'build', 'flash', 'debug', 'debugserver', 'run'). Commands to accomplish
-      these tasks will be generated in the right order.
-
-    \:maybe-skip-config:
-      if set, this indicates the reader may have already
-      created a build directory and changed there, and will tweak the text to
-      note that doing so again is not necessary.
-
-    \:compact:
-      if set, the generated output is a single code block with no
-      additional comment lines
-
-    \:west-args:
-      if set, additional arguments to the west invocation (ignored for CMake)
-
-    \:flash-args:
-      if set, additional arguments to the flash invocation
-
     '''
     has_content = False
     required_arguments = 0
@@ -186,6 +102,16 @@ class ZephyrAppCommandsDirective(Directive):
         if compact and skip_config:
             raise self.error('Both compact and maybe-skip-config options were given.')
 
+        if zephyr_app:
+            # as folks might use "<...>" notation to indicate a variable portion of the path, we
+            # deliberately don't check for the validity of such paths.
+            if not any([x in zephyr_app for x in ["<", ">"]]):
+                app_path = ZEPHYR_BASE / zephyr_app
+                if not app_path.is_dir():
+                    raise self.error(
+                        f"zephyr-app: {zephyr_app} is not a valid folder in the zephyr tree."
+                    )
+
         app = app or zephyr_app
         in_tree = self.IN_TREE_STR if zephyr_app else None
         # Allow build directories which are nested.
@@ -261,7 +187,6 @@ class ZephyrAppCommandsDirective(Directive):
         self.add_name(literal)
         literal['language'] = 'shell'
         return literal
-
 
     def _generate_west(self, **kwargs):
         content = []

@@ -18,7 +18,7 @@
 #include <zephyr/bluetooth/hci.h>
 #include <zephyr/bluetooth/iso.h>
 #include <zephyr/bluetooth/uuid.h>
-#include <zephyr/net/buf.h>
+#include <zephyr/net_buf.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 #include <zephyr/sys/util_macro.h>
@@ -146,6 +146,16 @@ static void bap_broadcast_assistant_recv_state_cb(
 			   BT_AUDIO_BROADCAST_CODE_SIZE) != 0) {
 			FAIL("Bad code is not what we sent");
 			return;
+		}
+
+		for (uint8_t i = 0; i < state->num_subgroups; i++) {
+			const struct bt_bap_bass_subgroup *subgroup = &state->subgroups[i];
+
+			if (subgroup->bis_sync != BT_BAP_BIS_SYNC_FAILED) {
+				FAIL("Invalid BIS sync value 0x%08X for failed sync",
+				     subgroup->bis_sync);
+				return;
+			}
 		}
 	}
 
@@ -326,6 +336,7 @@ static void test_bass_discover(void)
 	int err;
 
 	printk("Discovering BASS\n");
+	UNSET_FLAG(flag_discovery_complete);
 	err = bt_bap_broadcast_assistant_discover(default_conn);
 	if (err != 0) {
 		FAIL("Failed to discover BASS %d\n", err);
@@ -335,7 +346,7 @@ static void test_bass_discover(void)
 	WAIT_FOR_FLAG(flag_discovery_complete);
 
 	/* Verify that we can discover again */
-	flag_discovery_complete = false;
+	UNSET_FLAG(flag_discovery_complete);
 	err = bt_bap_broadcast_assistant_discover(default_conn);
 	if (err != 0) {
 		FAIL("Failed to discover BASS for the second time: %d\n", err);

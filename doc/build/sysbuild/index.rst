@@ -157,7 +157,7 @@ To handle this, sysbuild has namespaces for configuration variables. You can use
 namespaces to direct settings either to sysbuild itself or to a specific Zephyr
 application managed by sysbuild using the information in these sections.
 
-The following example shows how to build :ref:`hello_world` with MCUboot enabled,
+The following example shows how to build :zephyr:code-sample:`hello_world` with MCUboot enabled,
 applying to both images debug optimizations:
 
 .. tabs::
@@ -658,7 +658,7 @@ with ``application``.
 Sysbuild file suffix support
 ----------------------------
 
-File suffix support through the makevar:`FILE_SUFFIX` is supported in sysbuild
+File suffix support through the :makevar:`FILE_SUFFIX` is supported in sysbuild
 (see :ref:`application-file-suffixes` for details on this feature in applications). For sysbuild,
 a globally provided option will be passed down to all images. In addition, the image configuration
 file will have this value applied and used (instead of the build type) if the file exists.
