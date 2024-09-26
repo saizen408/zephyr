@@ -406,6 +406,13 @@ static int dma_xilinx_axi_dma_clean_up_sg_descriptors(
 		/* clears the flags such that the DMA does not transfer it twice or errors */
 		current_descriptor->control = current_descriptor->status = 0;
 
+		/* callback might start new transfer */
+		/* hence, the transfer end needs to be updated */
+		channel_data->current_transfer_end_index++;
+		if (channel_data->current_transfer_end_index >= channel_data->num_descriptors) {
+			channel_data->current_transfer_end_index = 0;
+		}
+
 		if (channel_data->completion_callback) {
 			LOG_DBG("Received packet with %u bytes!", channel_data->last_rx_size);
 			channel_data->completion_callback(
@@ -413,10 +420,6 @@ static int dma_xilinx_axi_dma_clean_up_sg_descriptors(
 				XILINX_AXI_DMA_TX_CHANNEL_NUM, retval);
 		}
 
-		channel_data->current_transfer_end_index++;
-		if (channel_data->current_transfer_end_index >= channel_data->num_descriptors) {
-			channel_data->current_transfer_end_index = 0;
-		}
 
 		current_descriptor =
 			&channel_data->descriptors[channel_data->current_transfer_end_index];

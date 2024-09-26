@@ -38,7 +38,7 @@ LOG_MODULE_REGISTER(eth_xilinx_axienet_mdio, CONFIG_ETHERNET_LOG_LEVEL);
 
 /* 2.5 MHz, i.e., max MDIO clock according to IEEE spec */
 #define XILINX_AXIENET_MDIO_MDIO_TARGET_FREQUENCY_HZ 2500000
-#define XILINX_AXIENET_MDIO_INTERRUPT_TIMEOUT_MS  100
+#define XILINX_AXIENET_MDIO_INTERRUPT_TIMEOUT_MS     100
 
 struct mdio_xilinx_axienet_data {
 	struct k_sem irq_sema;
@@ -54,7 +54,7 @@ struct mdio_xilinx_axienet_config {
 };
 
 static void xilinx_axienet_mdio_write_register(const struct mdio_xilinx_axienet_config *config,
-			   uintptr_t reg_offset, uint32_t value)
+					       uintptr_t reg_offset, uint32_t value)
 {
 	volatile uint32_t *reg_addr = (uint32_t *)((uint8_t *)(config->reg) + reg_offset);
 	*reg_addr = value;
@@ -62,7 +62,7 @@ static void xilinx_axienet_mdio_write_register(const struct mdio_xilinx_axienet_
 }
 
 static uint32_t xilinx_axienet_read_mdio_register(const struct mdio_xilinx_axienet_config *config,
-			  uintptr_t reg_offset)
+						  uintptr_t reg_offset)
 {
 	const volatile uint32_t *reg_addr = (uint32_t *)((uint8_t *)(config->reg) + reg_offset);
 	const uint32_t ret = *reg_addr;
@@ -79,47 +79,42 @@ static void mdio_xilinx_axienet_bus_disable(const struct device *dev)
 	LOG_INF("Disable MDIO Bus!");
 
 	xilinx_axienet_mdio_write_register(config, XILINX_AXIENET_MDIO_INTERRUPT_ENABLE_REG_OFFSET,
-			   XILINX_AXIENET_MDIO_INTERRUPT_DISABLE_ALL_MASK);
+					   XILINX_AXIENET_MDIO_INTERRUPT_DISABLE_ALL_MASK);
 
 	xilinx_axienet_mdio_write_register(config, XILINX_AXIENET_MDIO_SETUP_REG_OFFSET,
-			   XILINX_AXIENET_MDIO_SETUP_REG_MDIO_DISABLE_MASK);
+					   XILINX_AXIENET_MDIO_SETUP_REG_MDIO_DISABLE_MASK);
 	data->bus_enabled = false;
 }
 
 static void enable_mdio_bus(const struct mdio_xilinx_axienet_config *config,
-		struct mdio_xilinx_axienet_data *data)
+			    struct mdio_xilinx_axienet_data *data)
 {
 
-	if ((xilinx_axienet_read_mdio_register(config,
-	XILINX_AXIENET_MDIO_SETUP_REG_OFFSET)
-	& XILINX_AXIENET_MDIO_SETUP_REG_MDIO_ENABLE_MASK) == 0
-	) {
+	if ((xilinx_axienet_read_mdio_register(config, XILINX_AXIENET_MDIO_SETUP_REG_OFFSET) &
+	     XILINX_AXIENET_MDIO_SETUP_REG_MDIO_ENABLE_MASK) == 0) {
 		int err;
 
 		xilinx_axienet_mdio_write_register(config, XILINX_AXIENET_MDIO_SETUP_REG_OFFSET,
-				XILINX_AXIENET_MDIO_SETUP_REG_MDIO_ENABLE_MASK |
-				data->clock_divider);
+						   XILINX_AXIENET_MDIO_SETUP_REG_MDIO_ENABLE_MASK |
+							   data->clock_divider);
 
 		xilinx_axienet_mdio_write_register(config,
-				XILINX_AXIENET_MDIO_INTERRUPT_ENABLE_REG_OFFSET,
-				XILINX_AXIENET_MDIO_INTERRUPT_MASK);
-
-
+						   XILINX_AXIENET_MDIO_INTERRUPT_ENABLE_REG_OFFSET,
+						   XILINX_AXIENET_MDIO_INTERRUPT_MASK);
 
 		if (config->have_irq) {
 			LOG_DBG("Waiting for bus enable!");
 			err = k_sem_take(&data->irq_sema,
-				K_MSEC(XILINX_AXIENET_MDIO_INTERRUPT_TIMEOUT_MS));
+					 K_MSEC(XILINX_AXIENET_MDIO_INTERRUPT_TIMEOUT_MS));
 
 			if (err != 0) {
 				LOG_ERR("Could not enable MDIO bus: %d (%s)", err, strerror(-err));
-
 			}
 		}
 
 		while ((xilinx_axienet_read_mdio_register(config,
-				XILINX_AXIENET_MDIO_SETUP_REG_OFFSET)
-				& XILINX_AXIENET_MDIO_SETUP_REG_MDIO_ENABLE_MASK) == 0) {
+							  XILINX_AXIENET_MDIO_SETUP_REG_OFFSET) &
+			XILINX_AXIENET_MDIO_SETUP_REG_MDIO_ENABLE_MASK) == 0) {
 			LOG_DBG("Waiting for bus enable!");
 		}
 
@@ -140,10 +135,9 @@ static void mdio_xilinx_axienet_bus_enable(const struct device *dev)
 	}
 
 	/* this might result in a MDIO frequency that is a bit lower than the max frequency */
-	clock_divider_full = (config->clock_frequency_hz
-	/ (XILINX_AXIENET_MDIO_MDIO_TARGET_FREQUENCY_HZ)) * 2;
-	clock_divider = clock_divider_full
-	& XILINX_AXIENET_MDIO_SETUP_REG_MDIO_CLOCK_DIVIDER_MASK;
+	clock_divider_full =
+		(config->clock_frequency_hz / (XILINX_AXIENET_MDIO_MDIO_TARGET_FREQUENCY_HZ)) * 2;
+	clock_divider = clock_divider_full & XILINX_AXIENET_MDIO_SETUP_REG_MDIO_CLOCK_DIVIDER_MASK;
 
 	if (clock_divider != clock_divider_full) {
 		LOG_ERR("Clock divider overflow!");
@@ -152,10 +146,10 @@ static void mdio_xilinx_axienet_bus_enable(const struct device *dev)
 	data->clock_divider = clock_divider;
 
 	LOG_INF("Enable MDIO Bus assuming ethernet clock frequency %u divider %u!",
-	config->clock_frequency_hz, clock_divider);
+		config->clock_frequency_hz, clock_divider);
 
 	xilinx_axienet_mdio_write_register(config, XILINX_AXIENET_MDIO_SETUP_REG_OFFSET,
-			   clock_divider);
+					   clock_divider);
 
 	enable_mdio_bus(config, data);
 
@@ -163,7 +157,7 @@ static void mdio_xilinx_axienet_bus_enable(const struct device *dev)
 }
 
 static int mdio_xilinx_axienet_read(const struct device *dev, uint8_t prtad, uint8_t devad,
-			uint16_t *data)
+				    uint16_t *data)
 {
 	const struct mdio_xilinx_axienet_config *config = dev->config;
 	struct mdio_xilinx_axienet_data *dev_data = dev->data;
@@ -184,38 +178,34 @@ static int mdio_xilinx_axienet_read(const struct device *dev, uint8_t prtad, uin
 	LOG_DBG("Waiting for IRQ from MDIO!");
 
 	xilinx_axienet_mdio_write_register(
-	config, XILINX_AXIENET_MDIO_CONTROL_REG_OFFSET,
-	XILINX_AXIENET_MDIO_CONTROL_REG_MASK_INITIATE |
-		(prtad << XILINX_AXIENET_MDIO_CONTROL_REG_SHIFT_PHYADDR) |
-		(devad << XILINX_AXIENET_MDIO_CONTROL_REG_SHIFT_REGADDR) |
-		XILINX_AXIENET_MDIO_CONTROL_REG_MASK_READ);
+		config, XILINX_AXIENET_MDIO_CONTROL_REG_OFFSET,
+		XILINX_AXIENET_MDIO_CONTROL_REG_MASK_INITIATE |
+			(prtad << XILINX_AXIENET_MDIO_CONTROL_REG_SHIFT_PHYADDR) |
+			(devad << XILINX_AXIENET_MDIO_CONTROL_REG_SHIFT_REGADDR) |
+			XILINX_AXIENET_MDIO_CONTROL_REG_MASK_READ);
 
-	xilinx_axienet_mdio_write_register(config,
-	XILINX_AXIENET_MDIO_INTERRUPT_ENABLE_REG_OFFSET,
-	XILINX_AXIENET_MDIO_INTERRUPT_MASK);
-
+	xilinx_axienet_mdio_write_register(config, XILINX_AXIENET_MDIO_INTERRUPT_ENABLE_REG_OFFSET,
+					   XILINX_AXIENET_MDIO_INTERRUPT_MASK);
 
 	if (config->have_irq) {
 		err = k_sem_take(&dev_data->irq_sema,
-			K_MSEC(XILINX_AXIENET_MDIO_INTERRUPT_TIMEOUT_MS));
+				 K_MSEC(XILINX_AXIENET_MDIO_INTERRUPT_TIMEOUT_MS));
 
-	if (err != 0) {
-		LOG_DBG("Error %d (%s) from IRQ semaphore - polling!", err, strerror(-err));
-	}
+		if (err != 0) {
+			LOG_DBG("Error %d (%s) from IRQ semaphore - polling!", err, strerror(-err));
+		}
 	}
 
-	while ((xilinx_axienet_read_mdio_register(config,
-		XILINX_AXIENET_MDIO_CONTROL_REG_OFFSET)
-		& XILINX_AXIENET_MDIO_CONTROL_REG_MASK_READY) == 0x0) {
+	while ((xilinx_axienet_read_mdio_register(config, XILINX_AXIENET_MDIO_CONTROL_REG_OFFSET) &
+		XILINX_AXIENET_MDIO_CONTROL_REG_MASK_READY) == 0x0) {
 		LOG_DBG("Transfer is not yet ready!");
 	}
 
 	LOG_DBG("IRQ from MDIO received - read complete!");
 
-
 	*data = (uint16_t)(xilinx_axienet_read_mdio_register(
-		   config, XILINX_AXIENET_MDIO_READ_DATA_REG_OFFSET) &
-		   XILINX_AXIENET_MDIO_READ_DATA_REG_DATA_MASK);
+				   config, XILINX_AXIENET_MDIO_READ_DATA_REG_OFFSET) &
+			   XILINX_AXIENET_MDIO_READ_DATA_REG_DATA_MASK);
 
 	LOG_DBG("Read %" PRIu16 " from MDIO!", *data);
 
@@ -223,7 +213,7 @@ static int mdio_xilinx_axienet_read(const struct device *dev, uint8_t prtad, uin
 }
 
 static int mdio_xilinx_axienet_write(const struct device *dev, uint8_t prtad, uint8_t devad,
-			 uint16_t data)
+				     uint16_t data)
 {
 	const struct mdio_xilinx_axienet_config *config = dev->config;
 	struct mdio_xilinx_axienet_data *dev_data = dev->data;
@@ -241,34 +231,29 @@ static int mdio_xilinx_axienet_write(const struct device *dev, uint8_t prtad, ui
 		return -EIO;
 	}
 
-
-
 	LOG_DBG("Waiting for IRQ from MDIO!");
 
-	xilinx_axienet_mdio_write_register(config,
-	XILINX_AXIENET_MDIO_WRITE_DATA_REG_OFFSET, data);
+	xilinx_axienet_mdio_write_register(config, XILINX_AXIENET_MDIO_WRITE_DATA_REG_OFFSET, data);
 
-	xilinx_axienet_mdio_write_register(config,
-	XILINX_AXIENET_MDIO_INTERRUPT_ENABLE_REG_OFFSET,
-	XILINX_AXIENET_MDIO_INTERRUPT_MASK);
+	xilinx_axienet_mdio_write_register(config, XILINX_AXIENET_MDIO_INTERRUPT_ENABLE_REG_OFFSET,
+					   XILINX_AXIENET_MDIO_INTERRUPT_MASK);
 
 	xilinx_axienet_mdio_write_register(
-	config, XILINX_AXIENET_MDIO_CONTROL_REG_OFFSET,
-	XILINX_AXIENET_MDIO_CONTROL_REG_MASK_INITIATE |
-		(prtad << XILINX_AXIENET_MDIO_CONTROL_REG_SHIFT_PHYADDR) |
-		(devad << XILINX_AXIENET_MDIO_CONTROL_REG_SHIFT_REGADDR) |
-		XILINX_AXIENET_MDIO_CONTROL_REG_MASK_WRITE);
+		config, XILINX_AXIENET_MDIO_CONTROL_REG_OFFSET,
+		XILINX_AXIENET_MDIO_CONTROL_REG_MASK_INITIATE |
+			(prtad << XILINX_AXIENET_MDIO_CONTROL_REG_SHIFT_PHYADDR) |
+			(devad << XILINX_AXIENET_MDIO_CONTROL_REG_SHIFT_REGADDR) |
+			XILINX_AXIENET_MDIO_CONTROL_REG_MASK_WRITE);
 
 	if (config->have_irq) {
 		err = k_sem_take(&dev_data->irq_sema,
-			K_MSEC(XILINX_AXIENET_MDIO_INTERRUPT_TIMEOUT_MS));
+				 K_MSEC(XILINX_AXIENET_MDIO_INTERRUPT_TIMEOUT_MS));
 		if (err != 0) {
 			LOG_DBG("Error %d (%s) from IRQ semaphore - polling!", err, strerror(-err));
 		}
 	}
-	while ((xilinx_axienet_read_mdio_register(config,
-		XILINX_AXIENET_MDIO_CONTROL_REG_OFFSET)
-		& XILINX_AXIENET_MDIO_CONTROL_REG_MASK_READY) == 0x0) {
+	while ((xilinx_axienet_read_mdio_register(config, XILINX_AXIENET_MDIO_CONTROL_REG_OFFSET) &
+		XILINX_AXIENET_MDIO_CONTROL_REG_MASK_READY) == 0x0) {
 		LOG_DBG("IRQ from MDIO received but transfer is not yet ready!");
 	}
 
@@ -277,15 +262,14 @@ static int mdio_xilinx_axienet_write(const struct device *dev, uint8_t prtad, ui
 	return 0;
 }
 
-
 static inline void xilinx_axienet_mdio_isr(const struct device *dev)
 {
 	const struct mdio_xilinx_axienet_config *config = dev->config;
 	struct mdio_xilinx_axienet_data *data = dev->data;
 	uint32_t interrupt_status;
 
-	interrupt_status = xilinx_axienet_read_mdio_register(config,
-	XILINX_AXIENET_MDIO_INTERRUPT_STATUS_REG_OFFSET);
+	interrupt_status = xilinx_axienet_read_mdio_register(
+		config, XILINX_AXIENET_MDIO_INTERRUPT_STATUS_REG_OFFSET);
 
 	if (interrupt_status & XILINX_AXIENET_MDIO_INTERRUPT_MASK) {
 		k_sem_give(&data->irq_sema);
@@ -293,9 +277,8 @@ static inline void xilinx_axienet_mdio_isr(const struct device *dev)
 	} else {
 		LOG_DBG("Unknown interrupt received: %x!", interrupt_status);
 	}
-	xilinx_axienet_mdio_write_register(config,
-	XILINX_AXIENET_MDIO_INTERRUPT_CLEAR_REG_OFFSET,
-	XILINX_AXIENET_MDIO_INTERRUPT_MASK);
+	xilinx_axienet_mdio_write_register(config, XILINX_AXIENET_MDIO_INTERRUPT_CLEAR_REG_OFFSET,
+					   XILINX_AXIENET_MDIO_INTERRUPT_MASK);
 }
 
 static int xilinx_axienet_mdio_probe(const struct device *dev)
@@ -303,7 +286,6 @@ static int xilinx_axienet_mdio_probe(const struct device *dev)
 	const struct mdio_xilinx_axienet_config *config = dev->config;
 	struct mdio_xilinx_axienet_data *data = dev->data;
 	int err;
-
 
 	LOG_INF("Enabling IRQ!");
 
@@ -325,46 +307,31 @@ static const struct mdio_driver_api mdio_xilinx_axienet_api = {
 	.bus_disable = mdio_xilinx_axienet_bus_disable,
 	.bus_enable = mdio_xilinx_axienet_bus_enable,
 	.read = mdio_xilinx_axienet_read,
-	.write = mdio_xilinx_axienet_write
-};
+	.write = mdio_xilinx_axienet_write};
 
-#define SETUP_IRQS(inst)			\
-	IRQ_CONNECT(DT_INST_IRQN(inst),         \
-		DT_INST_IRQ(inst, priority),    \
-		xilinx_axienet_mdio_isr,        \
-		DEVICE_DT_INST_GET(inst), 0);   \
-						\
+#define SETUP_IRQS(inst)                                                                           \
+	IRQ_CONNECT(DT_INST_IRQN(inst), DT_INST_IRQ(inst, priority), xilinx_axienet_mdio_isr,      \
+		    DEVICE_DT_INST_GET(inst), 0);                                                  \
+                                                                                                   \
 	irq_enable(DT_INST_IRQN(inst))
 
-#define XILINX_AXIENET_MDIO_INIT(inst)			\
-								\
-	static void xilinx_axienet_mdio_config_##inst(          \
-		const struct mdio_xilinx_axienet_data *data)    \
-{								\
-								\
-	COND_CODE_1(DT_INST_NODE_HAS_PROP(inst, interrupts),    \
-		(SETUP_IRQS(inst)),				\
-		(LOG_INF("No IRQs defined!")));		\
-	}                                                       \
-	static const struct mdio_xilinx_axienet_config          \
-	mdio_xilinx_axienet_config##inst = {			\
-	.config_func = xilinx_axienet_mdio_config_##inst,	\
-	.reg = (void *)(uintptr_t)DT_INST_REG_ADDR(inst),	\
-	.clock_frequency_hz = DT_INST_PROP(inst,		\
-		clock_frequency),                               \
-	.have_irq = DT_INST_NODE_HAS_PROP(inst, interrupts)	\
-	};                                                      \
-	static struct mdio_xilinx_axienet_data                  \
-	mdio_xilinx_axienet_data##inst = {			\
-	0							\
-	};                                                      \
-	DEVICE_DT_INST_DEFINE(inst, xilinx_axienet_mdio_probe,  \
-		  NULL,					\
-		  &mdio_xilinx_axienet_data##inst,		\
-		  &mdio_xilinx_axienet_config##inst,		\
-		  POST_KERNEL,				\
-		  CONFIG_MDIO_INIT_PRIORITY,			\
-		  &mdio_xilinx_axienet_api);
+#define XILINX_AXIENET_MDIO_INIT(inst)                                                             \
+                                                                                                   \
+	static void xilinx_axienet_mdio_config_##inst(const struct mdio_xilinx_axienet_data *data) \
+	{                                                                                          \
+                                                                                                   \
+		COND_CODE_1(DT_INST_NODE_HAS_PROP(inst, interrupts), (SETUP_IRQS(inst)),           \
+			    (LOG_INF("No IRQs defined!")));                                        \
+	}                                                                                          \
+	static const struct mdio_xilinx_axienet_config mdio_xilinx_axienet_config##inst = {        \
+		.config_func = xilinx_axienet_mdio_config_##inst,                                  \
+		.reg = (void *)(uintptr_t)DT_REG_ADDR(DT_INST_PARENT(inst)),                       \
+		.clock_frequency_hz = DT_INST_PROP(inst, clock_frequency),                         \
+		.have_irq = DT_INST_NODE_HAS_PROP(inst, interrupts)};                              \
+	static struct mdio_xilinx_axienet_data mdio_xilinx_axienet_data##inst = {0};               \
+	DEVICE_DT_INST_DEFINE(inst, xilinx_axienet_mdio_probe, NULL,                               \
+			      &mdio_xilinx_axienet_data##inst, &mdio_xilinx_axienet_config##inst,  \
+			      POST_KERNEL, CONFIG_MDIO_INIT_PRIORITY, &mdio_xilinx_axienet_api);
 
 #define DT_DRV_COMPAT xlnx_axi_ethernet_7_2_mdio
 DT_INST_FOREACH_STATUS_OKAY(XILINX_AXIENET_MDIO_INIT)
