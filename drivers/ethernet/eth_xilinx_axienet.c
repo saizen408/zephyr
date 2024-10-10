@@ -2,7 +2,7 @@
  * Xilinx AXI 1G / 2.5G Ethernet Subsystem
  *
  * Copyright(c) 2024, CISPA Helmholtz Center for Information Security
- * SPDX - License - Identifier : Apache - 2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <zephyr/logging/log.h>
@@ -105,7 +105,6 @@ static void xilinx_axienet_rx_callback(const struct device *dma, void *user_data
 	(void)ethdev;
 	if (status < 0) {
 		LOG_ERR("DMA RX error: %d", status);
-		k_panic();
 		eth_stats_update_errors_rx(data->interface);
 	} else {
 		unsigned int packet_size = dma_xilinx_axi_dma_last_received_frame_length(dma);
@@ -131,7 +130,6 @@ static void xilinx_axienet_rx_callback(const struct device *dma, void *user_data
 
 	if (setup_dma_rx_transfer(ethdev, ethdev->config, ethdev->data)) {
 		LOG_ERR("Could not set up next RX DMA transfer!");
-		k_panic();
 	}
 }
 
@@ -143,7 +141,6 @@ static void xilinx_axienet_tx_callback(const struct device *dev, void *user_data
 
 	if (status < 0) {
 		LOG_ERR("DMA TX error: %d", status);
-		k_panic();
 		eth_stats_update_errors_tx(data->interface);
 	}
 }
@@ -182,13 +179,12 @@ static int setup_dma_rx_transfer(const struct device *dev,
 
 		if (!config->dma) {
 			LOG_ERR("DMA handle is not provided in device tree!");
-			k_panic();
+			return -ENODEV;
 		}
 
 		err = dma_config(config->dma, XILINX_AXI_DMA_RX_CHANNEL_NUM, &dma_conf);
 		if (err) {
 			LOG_ERR("DMA config failed: %d", err);
-			k_panic();
 			return err;
 		}
 
@@ -199,7 +195,6 @@ static int setup_dma_rx_transfer(const struct device *dev,
 				 (uintptr_t)data->rx_buffer, sizeof(data->rx_buffer));
 		if (err) {
 			LOG_ERR("DMA reconfigure failed: %d", err);
-			k_panic();
 			return err;
 		}
 	}
@@ -242,14 +237,12 @@ static int setup_dma_tx_transfer(const struct device *dev,
 
 		if (!config->dma) {
 			LOG_ERR("DMA handle is not provided in device tree!");
-			k_panic();
 			return -EINVAL;
 		}
 
 		err = dma_config(config->dma, XILINX_AXI_DMA_TX_CHANNEL_NUM, &dma_conf);
 		if (err) {
 			LOG_ERR("DMA config failed: %d", err);
-			k_panic();
 			return err;
 		}
 
@@ -260,7 +253,6 @@ static int setup_dma_tx_transfer(const struct device *dev,
 				 (uintptr_t)data->tx_buffer, 0x0, buffer_len);
 		if (err) {
 			LOG_ERR("DMA reconfigure failed: %d", err);
-			k_panic();
 			return err;
 		}
 	}
@@ -278,12 +270,12 @@ static void xilinx_axienet_isr(const struct device *dev)
 	(void)data;
 
 	if (status & XILINX_AXIENET_INTERRUPT_PENDING_RXFIFOOVR_MASK) {
-		LOG_ERR("FIFO was overrun!");
-		k_panic();
+		LOG_WRN("FIFO was overrun - probably lost packets!");
 		eth_stats_update_errors_rx(data->interface);
 	} else if (status & XILINX_AXIENET_INTERRUPT_PENDING_RXREJ_MASK) {
-		LOG_ERR("Erroneous frame received!");
-		k_panic();
+		/* this is extremely rare on Ethernet */
+		/* most likely cause is mistake in FPGA configuration */
+		LOG_WRN("Erroneous frame received!");
 		eth_stats_update_errors_rx(data->interface);
 	}
 
@@ -368,7 +360,7 @@ static int xilinx_axienet_get_config(const struct device *dev, enum ethernet_con
 			config->chksum_support =
 				ETHERNET_CHECKSUM_SUPPORT_IPV4_HEADER |
 				ETHERNET_CHECKSUM_SUPPORT_TCP | ETHERNET_CHECKSUM_SUPPORT_UDP |
-						 ETHERNET_CHECKSUM_SUPPORT_IPV6_HEADER |
+				ETHERNET_CHECKSUM_SUPPORT_IPV6_HEADER |
 				ETHERNET_CHECKSUM_SUPPORT_TCP | ETHERNET_CHECKSUM_SUPPORT_UDP;
 		} else {
 			config->chksum_support = ETHERNET_CHECKSUM_SUPPORT_NONE;
@@ -379,7 +371,7 @@ static int xilinx_axienet_get_config(const struct device *dev, enum ethernet_con
 			config->chksum_support =
 				ETHERNET_CHECKSUM_SUPPORT_IPV4_HEADER |
 				ETHERNET_CHECKSUM_SUPPORT_TCP | ETHERNET_CHECKSUM_SUPPORT_UDP |
-						 ETHERNET_CHECKSUM_SUPPORT_IPV6_HEADER |
+				ETHERNET_CHECKSUM_SUPPORT_IPV6_HEADER |
 				ETHERNET_CHECKSUM_SUPPORT_TCP | ETHERNET_CHECKSUM_SUPPORT_UDP;
 		} else {
 			config->chksum_support = ETHERNET_CHECKSUM_SUPPORT_NONE;
@@ -412,7 +404,6 @@ static int xilinx_axienet_send(const struct device *dev, struct net_pkt *pkt)
 
 	if (net_pkt_read(pkt, data->tx_buffer, pkt_len)) {
 		LOG_ERR("Failed to read packet into TX buffer!");
-		k_panic();
 		return -EIO;
 	}
 	return setup_dma_tx_transfer(dev, config, data, pkt_len);
