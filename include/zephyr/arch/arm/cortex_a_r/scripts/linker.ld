@@ -24,7 +24,7 @@
 #else
   #define ROMABLE_REGION RAM
 #endif
-#define RAMABLE_REGION DDR4
+#define RAMABLE_REGION RAM
 
 
 #if !defined(CONFIG_XIP) && (CONFIG_FLASH_SIZE == 0)
