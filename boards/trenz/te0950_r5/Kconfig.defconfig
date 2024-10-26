@@ -1,7 +1,7 @@
 # Copyright (c) 2022 Linaro.
 # SPDX-License-Identifier: Apache-2.0
 
-if BOARD_VCK190_R5
+if BOARD_TE0950_R5
 
 config BUILD_OUTPUT_BIN
 	default y
@@ -13,4 +13,4 @@ config COMPILER_ISA_THUMB2
 
 endif
 
-endif # BOARD_VCK190_R5
+endif # BOARD_TE0950_R5

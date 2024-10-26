@@ -1,5 +1,5 @@
-identifier: vck190_r5
-name: Xilinx VCK190 Development board for Cortex-R5
+identifier: te0950_r5
+name: Trenz TE0950 Development board for Cortex-R5
 arch: arm
 toolchain:
   - zephyr

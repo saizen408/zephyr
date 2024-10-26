@@ -9,7 +9,7 @@
 #include <arm/xilinx/versal_rpu.dtsi>
 
 / {
-	model = "VCK190 Cortex-R5";
+	model = "TE0950 Cortex-R5";
 	compatible = "xlnx,zynqmp-r5";
 
 	chosen {
@@ -17,6 +17,7 @@
 		zephyr,flash = &flash0;
 		zephyr,console = &axi_uart16550_0;
 		zephyr,shell-uart = &axi_uart16550_0;
+		zephyr,ocm = &ocm;
 	};
 };
 

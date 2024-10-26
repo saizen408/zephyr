@@ -1,0 +1,5 @@
+board:
+  name: te0950_r5
+  vendor: trenz
+  socs:
+  - name: versal_rpu

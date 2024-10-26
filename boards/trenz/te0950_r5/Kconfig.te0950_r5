@@ -1,5 +1,5 @@
 # Copyright (c) 2022 Linaro.
 # SPDX-License-Identifier: Apache-2.0
 
-config BOARD_VCK190_R5
-	select SOC_XILINX_ZYNQMP_RPU
+config BOARD_TE0950_R5
+	select SOC_XILINX_VERSAL_RPU
