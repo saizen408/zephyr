@@ -10,6 +10,7 @@ LOG_MODULE_REGISTER(eth_xilinx_axienet, CONFIG_ETHERNET_LOG_LEVEL);
 
 #include <sys/types.h>
 #include <zephyr/kernel.h>
+#include <zephyr/cache.h>
 #include <zephyr/net/ethernet.h>
 #include <ethernet/eth_stats.h>
 #include <zephyr/drivers/dma.h>
@@ -53,8 +54,8 @@ LOG_MODULE_REGISTER(eth_xilinx_axienet, CONFIG_ETHERNET_LOG_LEVEL);
 struct xilinx_axienet_data {
 	/* device mac address */
 	uint8_t mac_addr[NET_ETH_ADDR_LEN];
-	uint8_t tx_buffer[NET_ETH_MTU];
-	uint8_t rx_buffer[NET_ETH_MTU];
+	__attribute__ ((aligned (0x20))) uint8_t tx_buffer[NET_ETH_MTU];
+	__attribute__ ((aligned (0x20))) uint8_t rx_buffer[NET_ETH_MTU];
 
 	struct net_if *interface;
 
@@ -158,6 +159,7 @@ static int setup_dma_rx_transfer(const struct device *dev,
 		head_block.source_address = 0x0;
 		head_block.dest_address = (uintptr_t)data->rx_buffer;
 		head_block.block_size = sizeof(data->rx_buffer);
+		cache_data_invd_range(data->rx_buffer,sizeof(data->rx_buffer));
 		head_block.next_block = NULL;
 		head_block.source_addr_adj = DMA_ADDR_ADJ_INCREMENT;
 		head_block.dest_addr_adj = DMA_ADDR_ADJ_INCREMENT;
@@ -191,6 +193,7 @@ static int setup_dma_rx_transfer(const struct device *dev,
 		data->dma_is_configured_rx = true;
 	} else {
 		/* can use faster "reload" API, as everything else stays the same */
+		cache_data_invd_range(data->rx_buffer,sizeof(data->rx_buffer));
 		err = dma_reload(config->dma, XILINX_AXI_DMA_RX_CHANNEL_NUM, 0x0,
 				 (uintptr_t)data->rx_buffer, sizeof(data->rx_buffer));
 		if (err) {
@@ -214,6 +217,7 @@ static int setup_dma_tx_transfer(const struct device *dev,
 		static struct dma_config dma_conf;
 
 		head_block.source_address = (uintptr_t)data->tx_buffer;
+		cache_data_flush_range(data->tx_buffer, buffer_len);
 		head_block.dest_address = 0x0;
 		head_block.block_size = buffer_len;
 		head_block.next_block = NULL;
@@ -249,6 +253,7 @@ static int setup_dma_tx_transfer(const struct device *dev,
 		data->dma_is_configured_tx = true;
 	} else {
 		/* can use faster "reload" API, as everything else stays the same */
+		cache_data_flush_range(data->tx_buffer, buffer_len);
 		err = dma_reload(config->dma, XILINX_AXI_DMA_TX_CHANNEL_NUM,
 				 (uintptr_t)data->tx_buffer, 0x0, buffer_len);
 		if (err) {
