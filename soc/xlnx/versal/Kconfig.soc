@@ -1,0 +1,17 @@
+# Copyright (c) 2024 Northrop Grumman
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_XILINX_VERSAL
+	bool
+
+config SOC_XILINX_VERSAL_RPU
+	bool
+	select SOC_XILINX_VERSAL
+	help
+	  Xilinx Versal RPU
+
+config SOC_FAMILY
+	default "xilinx_versal" if SOC_XILINX_VERSAL
+
+config SOC
+	default "versal_rpu" if SOC_XILINX_VERSAL_RPU
