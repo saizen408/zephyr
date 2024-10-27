@@ -451,7 +451,7 @@ dma_xilinx_axi_dma_clean_up_sg_descriptors(const struct device *dev,
 		&channel_data->descriptors[channel_data->current_transfer_end_index];
 	unsigned int processed_packets = 0;
 
-	cache_data_invd_range(current_descriptor,sizeof(struct dma_xilinx_axi_dma_sg_descriptor));
+	cache_data_invd_range((void*)current_descriptor,sizeof(struct dma_xilinx_axi_dma_sg_descriptor));
 
 	while (current_descriptor->status & XILINX_AXI_DMA_SG_DESCRIPTOR_STATUS_COMPLETE_MASK ||
 	       current_descriptor->status & ~XILINX_AXI_DMA_SG_DESCRIPTOR_STATUS_TRANSFERRED_MASK) {
@@ -459,7 +459,7 @@ dma_xilinx_axi_dma_clean_up_sg_descriptors(const struct device *dev,
 		int retval = DMA_STATUS_COMPLETE;
 
 		/*Invalidate the buffer associated with the dma. This probably only need to be done on RX ones*/
-		cache_data_invd_range(current_descriptor->buffer_address,
+		cache_data_invd_range((void*)current_descriptor->buffer_address,
 				      (current_descriptor->control &
 				       XILINX_AXI_DMA_SG_DESCRIPTOR_CTRL_LENGTH_MASK));
 
@@ -516,7 +516,7 @@ dma_xilinx_axi_dma_clean_up_sg_descriptors(const struct device *dev,
 			channel_data->current_transfer_end_index = 0;
 		}
 
-		cache_data_flush_range(current_descriptor,sizeof(struct dma_xilinx_axi_dma_sg_descriptor));
+		cache_data_flush_range((void*)current_descriptor,sizeof(struct dma_xilinx_axi_dma_sg_descriptor));
 		if (channel_data->completion_callback) {
 			LOG_DBG("Received packet with %u bytes!", channel_data->last_rx_size);
 			channel_data->completion_callback(
@@ -525,7 +525,7 @@ dma_xilinx_axi_dma_clean_up_sg_descriptors(const struct device *dev,
 		}
 		current_descriptor =
 			&channel_data->descriptors[channel_data->current_transfer_end_index];
-		cache_data_invd_range(current_descriptor,sizeof(struct dma_xilinx_axi_dma_sg_descriptor));
+		cache_data_invd_range((void*)current_descriptor,sizeof(struct dma_xilinx_axi_dma_sg_descriptor));
 		processed_packets++;
 	}
 
@@ -588,6 +588,8 @@ static int dma_xilinx_axi_dma_start(const struct device *dev, uint32_t channel)
 
 	/* running ISR in parallel could cause issues with the metadata */
 	const int irq_key = dma_xilinx_axi_dma_lock_irq(cfg, channel);
+	LOG_DBG("*****TX IRQ %u \n",cfg->irq0_channels[0]);
+	LOG_DBG("*****RX IRQ %u \n",cfg->irq0_channels[1]);
 
 	if (channel >= cfg->channels) {
 		LOG_ERR("Invalid channel %" PRIu32 " - must be < %" PRIu32 "!", channel,
@@ -606,7 +608,7 @@ static int dma_xilinx_axi_dma_start(const struct device *dev, uint32_t channel)
 
 	dma_xilinx_axi_dma_disable_cache();
 	current_descriptor = &channel_data->descriptors[tail_descriptor];
-	cache_data_flush_range(current_descriptor,sizeof(struct dma_xilinx_axi_dma_sg_descriptor));
+	cache_data_flush_range((void*)current_descriptor,sizeof(struct dma_xilinx_axi_dma_sg_descriptor));
 	first_unprocessed_descriptor =
 		&channel_data->descriptors[channel_data->current_transfer_end_index];
 
@@ -806,7 +808,7 @@ static inline int dma_xilinx_axi_dma_transfer_block(const struct dma_xilinx_axi_
 	barrier_dmem_fence_full();
 
 	dma_xilinx_axi_dma_enable_cache();
-	cache_data_flush_and_invd_range(current_descriptor,sizeof(struct dma_xilinx_axi_dma_sg_descriptor));
+	cache_data_flush_and_invd_range((void*)current_descriptor,sizeof(struct dma_xilinx_axi_dma_sg_descriptor));
 	dma_xilinx_axi_dma_unlock_irq(cfg, channel, irq_key);
 
 	return 0;
@@ -1026,10 +1028,10 @@ static int dma_xilinx_axi_dma_configure(const struct device *dev, uint32_t chann
 	data->channels[channel].completion_callback_user_data = dma_cfg->user_data;
 
 	if (channel == XILINX_AXI_DMA_TX_CHANNEL_NUM) {
-		cache_data_flush_range(data->channels[channel].descriptors,sizeof(descriptors_tx));
+		cache_data_flush_range((void*)data->channels[channel].descriptors,sizeof(descriptors_tx));
 
 	}else {
-		cache_data_flush_range(data->channels[channel].descriptors,sizeof(descriptors_rx));
+		cache_data_flush_range((void*)data->channels[channel].descriptors,sizeof(descriptors_rx));
 	}
 	LOG_INF("Completed configuration of AXI DMA - Starting transfer!");
 
