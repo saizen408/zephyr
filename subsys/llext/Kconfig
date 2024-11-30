@@ -14,15 +14,17 @@ choice LLEXT_BINARY_TYPE
 	prompt "Binary object type for llext"
 	default LLEXT_TYPE_ELF_OBJECT if ARM || ARM64
 	default LLEXT_TYPE_ELF_SHAREDLIB if XTENSA
+	default LLEXT_TYPE_ELF_RELOCATABLE if RISCV
 	help
 	  Object type for llext
 
 config LLEXT_TYPE_ELF_OBJECT
 	bool "Single object ELF file"
+	depends on !RISCV
 	help
 	  Build and expect object files as binary object type for the
 	  llext subsystem. A single compiler invocation is used to
-	  generate the object file.
+	  generate the object file. Currently not supported on RISC-V.
 
 config LLEXT_TYPE_ELF_RELOCATABLE
 	bool "Relocatable ELF file"
@@ -46,6 +48,16 @@ config LLEXT_HEAP_SIZE
 	default 8
 	help
 	  Heap size in kilobytes available to llext for dynamic allocation
+
+config LLEXT_BUILD_PIC
+	bool "Use -fPIC when building LLEXT"
+	depends on XTENSA
+	default y if LLEXT_TYPE_ELF_SHAREDLIB
+	help
+	  By default LLEXT compilation is performed with -fno-pic -fno-pie compiler
+	  flags. Some platforms can benefit from using -fPIC instead, in which case
+	  most internal linking is performed by the linker at build time. Select "y"
+	  to make use of that advantage.
 
 config LLEXT_SHELL
 	bool "llext shell commands"

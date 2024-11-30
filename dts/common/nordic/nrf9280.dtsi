@@ -6,10 +6,11 @@
 
 #include <mem.h>
 #include <nordic/nrf_common.dtsi>
-
+#include <zephyr/dt-bindings/adc/nrf-saadc.h>
 #include <zephyr/dt-bindings/misc/nordic-nrf-ficr-nrf9230-engb.h>
 #include <zephyr/dt-bindings/misc/nordic-domain-id-nrf9230.h>
 #include <zephyr/dt-bindings/misc/nordic-owner-id-nrf9230.h>
+#include <zephyr/dt-bindings/reserved-memory/nordic-owned-memory.h>
 
 /delete-node/ &sw_pwm;
 
@@ -73,14 +74,6 @@
 	reserved-memory {
 		#address-cells = <1>;
 		#size-cells = <1>;
-
-		cpurad_uicr_ext: memory@e401000 {
-			reg = <0xe401000 DT_SIZE_K(2)>;
-		};
-
-		cpuapp_uicr_ext: memory@e401800 {
-			reg = <0xe401800 DT_SIZE_K(2)>;
-		};
 	};
 
 	clocks {
@@ -112,14 +105,12 @@
 			compatible = "nordic,nrf-uicr-v2";
 			reg = <0xfff8000 DT_SIZE_K(2)>;
 			domain = <2>;
-			ptr-ext-uicr = <&cpuapp_uicr_ext>;
 		};
 
 		cpurad_uicr: uicr@fffa000 {
 			compatible = "nordic,nrf-uicr-v2";
 			reg = <0xfffa000 DT_SIZE_K(2)>;
 			domain = <3>;
-			ptr-ext-uicr = <&cpurad_uicr_ext>;
 		};
 
 		ficr: ficr@fffe000 {
@@ -736,11 +727,14 @@
 			};
 
 			comp: comparator@983000 {
+				/*
+				 * Use compatible "nordic,nrf-comp" to configure as COMP
+				 * Use compatible "nordic,nrf-lpcomp" to configure as LPCOMP
+				 */
 				compatible = "nordic,nrf-comp";
 				reg = <0x983000 0x1000>;
 				status = "disabled";
 				interrupts = <387 NRF_DEFAULT_IRQ_PRIORITY>;
-				#io-channel-cells = <1>;
 			};
 
 			temp: temperature-sensor@984000 {
@@ -821,6 +815,7 @@
 				#size-cells = <0>;
 				nordic,clockpin-enable = <NRF_FUN_TWIM_SDA>,
 							 <NRF_FUN_TWIM_SCL>;
+				zephyr,pm-device-runtime-auto;
 			};
 
 			spi130: spi@9a5000 {
@@ -860,6 +855,7 @@
 				#size-cells = <0>;
 				nordic,clockpin-enable = <NRF_FUN_TWIM_SDA>,
 							 <NRF_FUN_TWIM_SCL>;
+				zephyr,pm-device-runtime-auto;
 			};
 
 			spi131: spi@9a6000 {
@@ -933,6 +929,7 @@
 				#size-cells = <0>;
 				nordic,clockpin-enable = <NRF_FUN_TWIM_SDA>,
 							 <NRF_FUN_TWIM_SCL>;
+				zephyr,pm-device-runtime-auto;
 			};
 
 			spi132: spi@9b5000 {
@@ -972,6 +969,7 @@
 				#size-cells = <0>;
 				nordic,clockpin-enable = <NRF_FUN_TWIM_SDA>,
 							 <NRF_FUN_TWIM_SCL>;
+				zephyr,pm-device-runtime-auto;
 			};
 
 			spi133: spi@9b6000 {
@@ -1045,6 +1043,7 @@
 				#size-cells = <0>;
 				nordic,clockpin-enable = <NRF_FUN_TWIM_SDA>,
 							 <NRF_FUN_TWIM_SCL>;
+				zephyr,pm-device-runtime-auto;
 			};
 
 			spi134: spi@9c5000 {
@@ -1084,6 +1083,7 @@
 				#size-cells = <0>;
 				nordic,clockpin-enable = <NRF_FUN_TWIM_SDA>,
 							 <NRF_FUN_TWIM_SCL>;
+				zephyr,pm-device-runtime-auto;
 			};
 
 			spi135: spi@9c6000 {
@@ -1157,6 +1157,7 @@
 				#size-cells = <0>;
 				nordic,clockpin-enable = <NRF_FUN_TWIM_SDA>,
 							 <NRF_FUN_TWIM_SCL>;
+				zephyr,pm-device-runtime-auto;
 			};
 
 			spi136: spi@9d5000 {
@@ -1196,6 +1197,7 @@
 				#size-cells = <0>;
 				nordic,clockpin-enable = <NRF_FUN_TWIM_SDA>,
 							 <NRF_FUN_TWIM_SCL>;
+				zephyr,pm-device-runtime-auto;
 			};
 
 			spi137: spi@9d6000 {

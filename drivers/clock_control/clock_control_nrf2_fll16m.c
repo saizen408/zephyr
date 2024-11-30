@@ -8,7 +8,7 @@
 #include "clock_control_nrf2_common.h"
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/clock_control/nrf_clock_control.h>
-#include <hal/nrf_lrcconf.h>
+#include <soc_lrcconf.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(clock_control_nrf2, CONFIG_CLOCK_CONTROL_LOG_LEVEL);
@@ -26,7 +26,7 @@ BUILD_ASSERT(DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT) == 1,
 #define FLL16M_LFXO_NODE DT_INST_PHANDLE_BY_NAME(0, clocks, lfxo)
 #define FLL16M_HFXO_NODE DT_INST_PHANDLE_BY_NAME(0, clocks, hfxo)
 
-#define FLL16M_HAS_LFXO DT_NODE_HAS_STATUS(FLL16M_LFXO_NODE, okay)
+#define FLL16M_HAS_LFXO DT_NODE_HAS_STATUS_OKAY(FLL16M_LFXO_NODE)
 
 #define FLL16M_LFXO_ACCURACY DT_PROP(FLL16M_LFXO_NODE, accuracy_ppm)
 #define FLL16M_HFXO_ACCURACY DT_PROP(FLL16M_HFXO_NODE, accuracy_ppm)
@@ -64,7 +64,7 @@ static const struct clock_options {
 struct fll16m_dev_data {
 	STRUCT_CLOCK_CONFIG(fll16m, ARRAY_SIZE(clock_options)) clk_cfg;
 	struct onoff_client hfxo_cli;
-	struct clock_lrcconf_sink lrcconf_sink;
+	sys_snode_t fll16m_node;
 };
 
 struct fll16m_dev_config {
@@ -76,13 +76,13 @@ static void activate_fll16m_mode(struct fll16m_dev_data *dev_data, uint8_t mode)
 	/* TODO: change to nrf_lrcconf_* function when such is available. */
 
 	if (mode != FLL16M_MODE_DEFAULT) {
-		clock_request_lrcconf_poweron_main(&dev_data->lrcconf_sink);
+		soc_lrcconf_poweron_request(&dev_data->fll16m_node, NRF_LRCCONF_POWER_MAIN);
 	}
 
 	NRF_LRCCONF010->CLKCTRL[0].SRC = mode;
 
 	if (mode == FLL16M_MODE_DEFAULT) {
-		clock_release_lrcconf_poweron_main(&dev_data->lrcconf_sink);
+		soc_lrcconf_poweron_release(&dev_data->fll16m_node, NRF_LRCCONF_POWER_MAIN);
 	}
 
 	nrf_lrcconf_task_trigger(NRF_LRCCONF010, NRF_LRCCONF_TASK_CLKSTART_0);

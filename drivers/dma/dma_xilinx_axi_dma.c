@@ -125,7 +125,6 @@ LOG_MODULE_REGISTER(dma_xilinx_axi_dma, CONFIG_DMA_LOG_LEVEL);
 #define XILINX_AXI_DMA_REGS_SG_CTRL_RES2_MASK  0xFFFFF000
 
 #ifdef CONFIG_DMA_XILINX_AXI_DMA_DISABLE_CACHE_WHEN_ACCESSING_SG_DESCRIPTORS
-
 static inline void dma_xilinx_axi_dma_disable_cache(void)
 {
 	cache_data_disable();

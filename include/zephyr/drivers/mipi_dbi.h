@@ -63,7 +63,7 @@ extern "C" {
 		.cs = {							\
 			.gpio = GPIO_DT_SPEC_GET_BY_IDX_OR(DT_PHANDLE(DT_PARENT(node_id), \
 							   spi_dev), cs_gpios, \
-							   DT_REG_ADDR(node_id), \
+							   DT_REG_ADDR_RAW(node_id), \
 							   {}),		\
 			.delay = (delay_),				\
 		},							\
@@ -96,7 +96,7 @@ extern "C" {
  */
 #define MIPI_DBI_CONFIG_DT(node_id, operation_, delay_)			\
 	{								\
-		.mode = DT_PROP(node_id, mipi_mode),			\
+		.mode = DT_STRING_UPPER_TOKEN(node_id, mipi_mode),	\
 		.config = MIPI_DBI_SPI_CONFIG_DT(node_id, operation_, delay_), \
 	}
 

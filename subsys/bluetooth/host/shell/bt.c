@@ -1769,16 +1769,17 @@ static int cmd_scan_filter_set_addr(const struct shell *sh, size_t argc,
 {
 	const size_t max_cpy_len = sizeof(scan_filter.addr) - 1;
 	const char *addr_arg = argv[1];
+	size_t len = strlen(addr_arg);
 
 	/* Validate length including null terminator. */
-	if (strlen(addr_arg) > max_cpy_len) {
+	if (len > max_cpy_len) {
 		shell_error(ctx_shell, "Invalid address string: %s\n",
 			    addr_arg);
 		return -ENOEXEC;
 	}
 
 	/* Validate input to check if valid (subset of) BT address */
-	for (size_t i = 0; i < strlen(addr_arg); i++) {
+	for (size_t i = 0; i < len; i++) {
 		const char c = addr_arg[i];
 		uint8_t tmp;
 
@@ -2003,7 +2004,7 @@ static int cmd_advertise(const struct shell *sh, size_t argc, char *argv[])
 	param.interval_max = BT_GAP_ADV_FAST_INT_MAX_2;
 
 	if (!strcmp(argv[1], "on")) {
-		param.options = BT_LE_ADV_OPT_CONNECTABLE;
+		param.options = BT_LE_ADV_OPT_CONN;
 	} else if (!strcmp(argv[1], "nconn")) {
 		param.options = 0U;
 	} else {
@@ -2033,8 +2034,6 @@ static int cmd_advertise(const struct shell *sh, size_t argc, char *argv[])
 		} else if (!strcmp(arg, "name-ad")) {
 			name_ad = true;
 			name_sd = false;
-		} else if (!strcmp(arg, "one-time")) {
-			param.options |= BT_LE_ADV_OPT_ONE_TIME;
 		} else if (!strcmp(arg, "disable-37")) {
 			param.options |= BT_LE_ADV_OPT_DISABLE_CHAN_37;
 		} else if (!strcmp(arg, "disable-38")) {
@@ -2058,7 +2057,7 @@ static int cmd_advertise(const struct shell *sh, size_t argc, char *argv[])
 
 	atomic_clear(adv_opt);
 	atomic_set_bit_to(adv_opt, SHELL_ADV_OPT_CONNECTABLE,
-			  (param.options & BT_LE_ADV_OPT_CONNECTABLE) > 0);
+			  (param.options & BT_LE_ADV_OPT_CONN) > 0);
 	atomic_set_bit_to(adv_opt, SHELL_ADV_OPT_DISCOVERABLE, discoverable);
 	atomic_set_bit_to(adv_opt, SHELL_ADV_OPT_APPEARANCE, appearance);
 
@@ -2143,10 +2142,10 @@ static bool adv_param_parse(size_t argc, char *argv[],
 	memset(param, 0, sizeof(struct bt_le_adv_param));
 
 	if (!strcmp(argv[1], "conn-scan")) {
-		param->options |= BT_LE_ADV_OPT_CONNECTABLE;
+		param->options |= BT_LE_ADV_OPT_CONN;
 		param->options |= BT_LE_ADV_OPT_SCANNABLE;
 	} else if (!strcmp(argv[1], "conn-nscan")) {
-		param->options |= BT_LE_ADV_OPT_CONNECTABLE;
+		param->options |= BT_LE_ADV_OPT_CONN;
 	} else if (!strcmp(argv[1], "nconn-scan")) {
 		param->options |= BT_LE_ADV_OPT_SCANNABLE;
 	} else if (!strcmp(argv[1], "nconn-nscan")) {
@@ -2245,7 +2244,7 @@ static int cmd_adv_create(const struct shell *sh, size_t argc, char *argv[])
 
 	atomic_clear(adv_set_opt[adv_index]);
 	atomic_set_bit_to(adv_set_opt[adv_index], SHELL_ADV_OPT_CONNECTABLE,
-			  (param.options & BT_LE_ADV_OPT_CONNECTABLE) > 0);
+			  (param.options & BT_LE_ADV_OPT_CONN) > 0);
 	atomic_set_bit_to(adv_set_opt[adv_index], SHELL_ADV_OPT_EXT_ADV,
 			  (param.options & BT_LE_ADV_OPT_EXT_ADV) > 0);
 
@@ -3265,7 +3264,7 @@ static int cmd_connect_le(const struct shell *sh, size_t argc, char *argv[])
 {
 	int err;
 	bt_addr_le_t addr;
-	struct bt_conn *conn;
+	struct bt_conn *conn = NULL;
 	uint32_t options = 0;
 
 	/* When no arguments are specified, connect to the last scanned device. */
@@ -3321,33 +3320,6 @@ static int cmd_connect_le(const struct shell *sh, size_t argc, char *argv[])
 
 	return 0;
 }
-
-#if !defined(CONFIG_BT_FILTER_ACCEPT_LIST)
-static int cmd_auto_conn(const struct shell *sh, size_t argc, char *argv[])
-{
-	bt_addr_le_t addr;
-	int err;
-
-	err = bt_addr_le_from_str(argv[1], argv[2], &addr);
-	if (err) {
-		shell_error(sh, "Invalid peer address (err %d)", err);
-		return err;
-	}
-
-	if (argc < 4) {
-		return bt_le_set_auto_conn(&addr, BT_LE_CONN_PARAM_DEFAULT);
-	} else if (!strcmp(argv[3], "on")) {
-		return bt_le_set_auto_conn(&addr, BT_LE_CONN_PARAM_DEFAULT);
-	} else if (!strcmp(argv[3], "off")) {
-		return bt_le_set_auto_conn(&addr, NULL);
-	} else {
-		shell_help(sh);
-		return SHELL_CMD_HELP_PRINTED;
-	}
-
-	return 0;
-}
-#endif /* !defined(CONFIG_BT_FILTER_ACCEPT_LIST) */
 
 static int cmd_connect_le_name(const struct shell *sh, size_t argc, char *argv[])
 {
@@ -3901,6 +3873,35 @@ static int cmd_bondable(const struct shell *sh, size_t argc, char *argv[])
 
 	return 0;
 }
+
+#if defined(CONFIG_BT_BONDABLE_PER_CONNECTION)
+static int cmd_conn_bondable(const struct shell *sh, size_t argc, char *argv[])
+{
+	int err = 0;
+	bool enable;
+
+	if (!default_conn) {
+		shell_error(sh, "Not connected");
+		return -ENOEXEC;
+	}
+
+	enable = shell_strtobool(argv[1], 0, &err);
+	if (err) {
+		shell_help(sh);
+		return SHELL_CMD_HELP_PRINTED;
+	}
+
+	shell_print(sh, "[%p] set conn bondable %s", default_conn, argv[1]);
+
+	err = bt_conn_set_bondable(default_conn, enable);
+	if (err) {
+		shell_error(sh, "Set conn bondable failed: err %d", err);
+		return -ENOEXEC;
+	}
+	shell_print(sh, "Set conn bondable done");
+	return 0;
+}
+#endif /* CONFIG_BT_BONDABLE_PER_CONNECTION */
 
 static void bond_info(const struct bt_bond_info *info, void *user_data)
 {
@@ -4977,7 +4978,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(bt_cmds,
 	SHELL_CMD_ARG(advertise, NULL,
 		      "<type: off, on, nconn> [mode: discov, non_discov] "
 		      "[filter-accept-list: fal, fal-scan, fal-conn] [identity] [no-name] "
-		      "[one-time] [name-ad] [appearance] "
+		      "[name-ad] [appearance] "
 		      "[disable-37] [disable-38] [disable-39]",
 		      cmd_advertise, 2, 8),
 #if defined(CONFIG_BT_PERIPHERAL)
@@ -5048,9 +5049,6 @@ SHELL_STATIC_SUBCMD_SET_CREATE(bt_cmds,
 #if defined(CONFIG_BT_CENTRAL)
 	SHELL_CMD_ARG(connect, NULL, HELP_ADDR_LE EXT_ADV_SCAN_OPT,
 		      cmd_connect_le, 1, 3),
-#if !defined(CONFIG_BT_FILTER_ACCEPT_LIST)
-	SHELL_CMD_ARG(auto-conn, NULL, HELP_ADDR_LE, cmd_auto_conn, 3, 0),
-#endif /* !defined(CONFIG_BT_FILTER_ACCEPT_LIST) */
 	SHELL_CMD_ARG(connect-name, NULL, "<name filter>",
 		      cmd_connect_le_name, 2, 0),
 #endif /* CONFIG_BT_CENTRAL */
@@ -5079,6 +5077,9 @@ SHELL_STATIC_SUBCMD_SET_CREATE(bt_cmds,
 		      cmd_security, 1, 2),
 	SHELL_CMD_ARG(bondable, NULL, HELP_ONOFF, cmd_bondable,
 		      2, 0),
+#if defined(CONFIG_BT_BONDABLE_PER_CONNECTION)
+	SHELL_CMD_ARG(conn-bondable, NULL, HELP_ONOFF, cmd_conn_bondable, 2, 0),
+#endif /* CONFIG_BT_BONDABLE_PER_CONNECTION */
 	SHELL_CMD_ARG(bonds, NULL, HELP_NONE, cmd_bonds, 1, 0),
 	SHELL_CMD_ARG(connections, NULL, HELP_NONE, cmd_connections, 1, 0),
 	SHELL_CMD_ARG(auth, NULL,

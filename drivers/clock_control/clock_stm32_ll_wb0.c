@@ -39,7 +39,7 @@
 
 #if DT_NODE_HAS_PROP(STM32_CLOCK_CONTROL_NODE, slow_clock)
 
-#	if !DT_NODE_HAS_STATUS(DT_RCC_SLOWCLK_NODE, okay)
+#	if !DT_NODE_HAS_STATUS_OKAY(DT_RCC_SLOWCLK_NODE)
 #		error slow-clock source is not enabled
 #	endif
 
@@ -521,7 +521,7 @@ static enum clock_control_status stm32_clock_control_get_status(const struct dev
 	}
 }
 
-static struct clock_control_driver_api stm32_clock_control_api = {
+static DEVICE_API(clock_control, stm32_clock_control_api) = {
 	.on = stm32_clock_control_on,
 	.off = stm32_clock_control_off,
 	.get_rate = stm32_clock_control_get_subsys_rate,

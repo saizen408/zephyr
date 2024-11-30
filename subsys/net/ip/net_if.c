@@ -17,6 +17,7 @@ LOG_MODULE_REGISTER(net_if, CONFIG_NET_IF_LOG_LEVEL);
 #include <string.h>
 #include <zephyr/net/igmp.h>
 #include <zephyr/net/ipv4_autoconf.h>
+#include <zephyr/net/mld.h>
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/net_event.h>
 #include <zephyr/net/net_pkt.h>
@@ -174,6 +175,7 @@ struct net_if *z_vrfy_net_if_get_by_index(int index)
 #include <zephyr/syscalls/net_if_get_by_index_mrsh.c>
 #endif
 
+#if defined(CONFIG_NET_NATIVE)
 static inline void net_context_send_cb(struct net_context *context,
 				       int status)
 {
@@ -382,6 +384,7 @@ void net_if_queue_tx(struct net_if *iface, struct net_pkt *pkt)
 			;
 	}
 }
+#endif /* CONFIG_NET_NATIVE */
 
 void net_if_stats_reset(struct net_if *iface)
 {
@@ -445,6 +448,7 @@ static inline void init_iface(struct net_if *iface)
 	net_ipv6_pe_init(iface);
 }
 
+#if defined(CONFIG_NET_NATIVE)
 enum net_verdict net_if_send_data(struct net_if *iface, struct net_pkt *pkt)
 {
 	const struct net_l2 *l2;
@@ -516,11 +520,9 @@ enum net_verdict net_if_send_data(struct net_if *iface, struct net_pkt *pkt)
 		verdict = net_ipv6_prepare_for_send(pkt);
 	}
 
-#if defined(CONFIG_NET_IPV4_FRAGMENT)
-	if (net_pkt_family(pkt) == AF_INET) {
+	if (IS_ENABLED(CONFIG_NET_IPV4) && net_pkt_family(pkt) == AF_INET) {
 		verdict = net_ipv4_prepare_for_send(pkt);
 	}
-#endif
 
 done:
 	/*   NET_OK in which case packet has checked successfully. In this case
@@ -551,6 +553,7 @@ done:
 
 	return verdict;
 }
+#endif /* CONFIG_NET_NATIVE */
 
 int net_if_set_link_addr_locked(struct net_if *iface,
 				uint8_t *addr, uint8_t len,
@@ -1337,13 +1340,31 @@ void net_if_start_dad(struct net_if *iface)
 		goto out;
 	}
 
-	net_ipv6_addr_create_iid(&addr, net_if_get_link_addr(iface));
+	ret = net_ipv6_addr_generate_iid(iface, NULL,
+					 COND_CODE_1(CONFIG_NET_IPV6_IID_STABLE,
+						     ((uint8_t *)&ipv6->network_counter),
+						     (NULL)),
+					 COND_CODE_1(CONFIG_NET_IPV6_IID_STABLE,
+						     (sizeof(ipv6->network_counter)),
+						     (0U)),
+					 COND_CODE_1(CONFIG_NET_IPV6_IID_STABLE,
+						     (ipv6->iid ? ipv6->iid->dad_count : 0U),
+						     (0U)),
+					 &addr,
+					 net_if_get_link_addr(iface));
+	if (ret < 0) {
+		NET_WARN("IPv6 IID generation issue (%d)", ret);
+		goto out;
+	}
 
 	ifaddr = net_if_ipv6_addr_add(iface, &addr, NET_ADDR_AUTOCONF, 0);
 	if (!ifaddr) {
 		NET_ERR("Cannot add %s address to interface %p, DAD fails",
 			net_sprint_ipv6_addr(&addr), iface);
+		goto out;
 	}
+
+	IF_ENABLED(CONFIG_NET_IPV6_IID_STABLE, (ipv6->iid = ifaddr));
 
 	/* Start DAD for all the addresses that were added earlier when
 	 * the interface was down.
@@ -1378,10 +1399,11 @@ void net_if_ipv6_dad_failed(struct net_if *iface, const struct in6_addr *addr)
 		goto out;
 	}
 
+	if (IS_ENABLED(CONFIG_NET_IPV6_IID_STABLE) || IS_ENABLED(CONFIG_NET_IPV6_PE)) {
+		ifaddr->dad_count++;
+	}
 
 	if (IS_ENABLED(CONFIG_NET_IPV6_PE)) {
-		ifaddr->dad_count++;
-
 		timeout = COND_CODE_1(CONFIG_NET_IPV6_PE,
 				      (ifaddr->addr_timeout), (0));
 		preferred_lifetime = COND_CODE_1(CONFIG_NET_IPV6_PE,
@@ -2978,6 +3000,8 @@ out:
 	net_if_unlock(iface);
 }
 
+#endif /* CONFIG_NET_NATIVE_IPV6 */
+
 static uint8_t get_diff_ipv6(const struct in6_addr *src,
 			  const struct in6_addr *dst)
 {
@@ -3203,6 +3227,8 @@ struct net_if *net_if_ipv6_select_src_iface(const struct in6_addr *dst)
 	return iface;
 }
 
+#if defined(CONFIG_NET_NATIVE_IPV6)
+
 uint32_t net_if_ipv6_calc_reachable_time(struct net_if_ipv6 *ipv6)
 {
 	uint32_t min_reachable, max_reachable;
@@ -3242,16 +3268,29 @@ static void iface_ipv6_start(struct net_if *iface)
 
 static void iface_ipv6_stop(struct net_if *iface)
 {
-	struct in6_addr addr = { };
+	struct net_if_ipv6 *ipv6 = iface->config.ip.ipv6;
 
 	if (!net_if_flag_is_set(iface, NET_IF_IPV6) ||
 	    net_if_flag_is_set(iface, NET_IF_IPV6_NO_ND)) {
 		return;
 	}
 
-	net_ipv6_addr_create_iid(&addr, net_if_get_link_addr(iface));
+	if (ipv6 == NULL) {
+		return;
+	}
 
-	(void)net_if_ipv6_addr_rm(iface, &addr);
+	IF_ENABLED(CONFIG_NET_IPV6_IID_STABLE, (ipv6->network_counter++));
+	IF_ENABLED(CONFIG_NET_IPV6_IID_STABLE, (ipv6->iid = NULL));
+
+	/* Remove all autoconf addresses */
+	ARRAY_FOR_EACH(ipv6->unicast, i) {
+		if (ipv6->unicast[i].is_used &&
+		    ipv6->unicast[i].address.family == AF_INET6 &&
+		    ipv6->unicast[i].addr_type == NET_ADDR_AUTOCONF) {
+			(void)net_if_ipv6_addr_rm(iface,
+						  &ipv6->unicast[i].address.in6_addr);
+		}
+	}
 }
 
 static void iface_ipv6_init(int if_count)
@@ -3499,22 +3538,17 @@ out:
 struct net_if *net_if_ipv4_select_src_iface(const struct in_addr *dst)
 {
 	struct net_if *selected = NULL;
+	const struct in_addr *src;
 
-	STRUCT_SECTION_FOREACH(net_if, iface) {
-		bool ret;
-
-		ret = net_if_ipv4_addr_mask_cmp(iface, dst);
-		if (ret) {
-			selected = iface;
-			goto out;
-		}
+	src = net_if_ipv4_select_src_addr(NULL, dst);
+	if (src != net_ipv4_unspecified_address()) {
+		net_if_ipv4_addr_lookup(src, &selected);
 	}
 
 	if (selected == NULL) {
 		selected = net_if_get_default();
 	}
 
-out:
 	return selected;
 }
 
@@ -3527,8 +3561,7 @@ static uint8_t get_diff_ipv4(const struct in_addr *src,
 static inline bool is_proper_ipv4_address(struct net_if_addr *addr)
 {
 	if (addr->is_used && addr->addr_state == NET_ADDR_PREFERRED &&
-	    addr->address.family == AF_INET &&
-	    !net_ipv4_is_ll_addr(&addr->address.in_addr)) {
+	    addr->address.family == AF_INET) {
 		return true;
 	}
 
@@ -3537,7 +3570,7 @@ static inline bool is_proper_ipv4_address(struct net_if_addr *addr)
 
 static struct in_addr *net_if_ipv4_get_best_match(struct net_if *iface,
 						  const struct in_addr *dst,
-						  uint8_t *best_so_far)
+						  uint8_t *best_so_far, bool ll)
 {
 	struct net_if_ipv4 *ipv4;
 	struct in_addr *src = NULL;
@@ -3551,11 +3584,19 @@ static struct in_addr *net_if_ipv4_get_best_match(struct net_if *iface,
 	}
 
 	ARRAY_FOR_EACH(ipv4->unicast, i) {
+		struct in_addr subnet;
+
 		if (!is_proper_ipv4_address(&ipv4->unicast[i].ipv4)) {
 			continue;
 		}
 
-		len = get_diff_ipv4(dst, &ipv4->unicast[i].ipv4.address.in_addr);
+		if (net_ipv4_is_ll_addr(&ipv4->unicast[i].ipv4.address.in_addr) != ll) {
+			continue;
+		}
+
+		subnet.s_addr = ipv4->unicast[i].ipv4.address.in_addr.s_addr &
+				ipv4->unicast[i].netmask.s_addr;
+		len = get_diff_ipv4(dst, &subnet);
 		if (len >= *best_so_far) {
 			*best_so_far = len;
 			src = &ipv4->unicast[i].ipv4.address.in_addr;
@@ -3638,13 +3679,14 @@ const struct in_addr *net_if_ipv4_select_src_addr(struct net_if *dst_iface,
 		/* If caller has supplied interface, then use that */
 		if (dst_iface) {
 			src = net_if_ipv4_get_best_match(dst_iface, dst,
-							 &best_match);
+							 &best_match, false);
 		} else {
 			STRUCT_SECTION_FOREACH(net_if, iface) {
 				struct in_addr *addr;
 
 				addr = net_if_ipv4_get_best_match(iface, dst,
-								  &best_match);
+								  &best_match,
+								  false);
 				if (addr) {
 					src = addr;
 				}
@@ -3657,19 +3699,24 @@ const struct in_addr *net_if_ipv4_select_src_addr(struct net_if *dst_iface,
 		} else {
 			struct in_addr *addr;
 
-			addr = net_if_ipv4_get_ll(net_if_get_default(), NET_ADDR_PREFERRED);
-			if (addr) {
-				src = addr;
-				goto out;
-			}
-
 			STRUCT_SECTION_FOREACH(net_if, iface) {
-				addr = net_if_ipv4_get_ll(iface,
-							  NET_ADDR_PREFERRED);
+				addr = net_if_ipv4_get_best_match(iface, dst,
+								  &best_match,
+								  true);
 				if (addr) {
 					src = addr;
-					break;
 				}
+			}
+
+			/* Check the default interface again. It will only
+			 * be used if it has a valid LL address, and there was
+			 * no better match on any other interface.
+			 */
+			addr = net_if_ipv4_get_best_match(net_if_get_default(),
+							  dst, &best_match,
+							  true);
+			if (addr) {
+				src = addr;
 			}
 		}
 	}
@@ -3690,8 +3737,41 @@ const struct in_addr *net_if_ipv4_select_src_addr(struct net_if *dst_iface,
 		}
 	}
 
-out:
 	return src;
+}
+
+/* Internal function to get the first IPv4 address of the interface */
+struct net_if_addr *net_if_ipv4_addr_get_first_by_index(int ifindex)
+{
+	struct net_if *iface = net_if_get_by_index(ifindex);
+	struct net_if_addr *ifaddr = NULL;
+	struct net_if_ipv4 *ipv4;
+
+	if (!iface) {
+		return NULL;
+	}
+
+	net_if_lock(iface);
+
+	ipv4 = iface->config.ip.ipv4;
+	if (!ipv4) {
+		goto out;
+	}
+
+	ARRAY_FOR_EACH(ipv4->unicast, i) {
+		if (!ipv4->unicast[i].ipv4.is_used ||
+		    ipv4->unicast[i].ipv4.address.family != AF_INET) {
+			continue;
+		}
+
+		ifaddr = &ipv4->unicast[i].ipv4;
+		break;
+	}
+
+out:
+	net_if_unlock(iface);
+
+	return ifaddr;
 }
 
 struct net_if_addr *net_if_ipv4_addr_lookup(const struct in_addr *addr,
@@ -4207,7 +4287,9 @@ struct net_if_addr *net_if_ipv4_addr_add(struct net_if *iface,
 					 enum net_addr_type addr_type,
 					 uint32_t vlifetime)
 {
+	uint32_t default_netmask = UINT32_MAX << (32 - CONFIG_NET_IPV4_DEFAULT_NETMASK);
 	struct net_if_addr *ifaddr = NULL;
+	struct net_if_addr_ipv4 *cur;
 	struct net_if_ipv4 *ipv4;
 	int idx;
 
@@ -4224,17 +4306,17 @@ struct net_if_addr *net_if_ipv4_addr_add(struct net_if *iface,
 	}
 
 	ARRAY_FOR_EACH(ipv4->unicast, i) {
-		struct net_if_addr *cur = &ipv4->unicast[i].ipv4;
+		cur = &ipv4->unicast[i];
 
 		if (addr_type == NET_ADDR_DHCP
-		    && cur->addr_type == NET_ADDR_OVERRIDABLE) {
-			ifaddr = cur;
+		    && cur->ipv4.addr_type == NET_ADDR_OVERRIDABLE) {
+			ifaddr = &cur->ipv4;
 			idx = i;
 			break;
 		}
 
 		if (!ipv4->unicast[i].ipv4.is_used) {
-			ifaddr = cur;
+			ifaddr = &cur->ipv4;
 			idx = i;
 			break;
 		}
@@ -4271,6 +4353,8 @@ struct net_if_addr *net_if_ipv4_addr_add(struct net_if *iface,
 		} else {
 			ifaddr->addr_state = NET_ADDR_PREFERRED;
 		}
+
+		cur->netmask.s_addr = htonl(default_netmask);
 
 		net_mgmt_event_notify_with_info(NET_EVENT_IPV4_ADDR_ADD, iface,
 						&ifaddr->address.in_addr,
@@ -5599,7 +5683,7 @@ int net_if_set_promisc(struct net_if *iface)
 	net_if_lock(iface);
 
 	ret = promisc_mode_set(iface, true);
-	if (ret < 0) {
+	if (ret < 0 && ret != -EALREADY) {
 		goto out;
 	}
 
@@ -5981,6 +6065,8 @@ void net_if_init(void)
 			set_default_name(iface);
 		}
 #endif
+
+		net_stats_prometheus_init(iface);
 
 		if_count++;
 	}

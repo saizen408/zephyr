@@ -133,6 +133,7 @@ ARC arch:
     - evgeniy-paltsev
   collaborators:
     - abrodkin
+    - tagunil
   files:
     - arch/arc/
     - include/zephyr/arch/arc/
@@ -314,12 +315,13 @@ Bluetooth HCI:
     - HoZHel
   files:
     - include/zephyr/drivers/bluetooth/
+    - include/zephyr/drivers/bluetooth.h
     - drivers/bluetooth/
     - samples/bluetooth/hci_*/
     - tests/bsim/bluetooth/hci_uart/
     - dts/bindings/bluetooth/
   labels:
-    - "area: Bluetooth Host"
+    - "area: Bluetooth HCI"
     - "area: Bluetooth"
   tests:
     - bluetooth
@@ -359,8 +361,9 @@ Bluetooth Host:
     - alwa-nordic
   collaborators:
     - hermabe
-    - Thalley
+    - rugeGerritsen
     - sjanc
+    - Thalley
     - theob-pro
   files:
     - doc/connectivity/bluetooth/
@@ -388,8 +391,10 @@ Bluetooth Host:
     - doc/connectivity/bluetooth/img/ctlr*
     - doc/connectivity/bluetooth/api/audio/
     - doc/connectivity/bluetooth/api/mesh/
-    - doc/connectivity/bluetooth/api/shell/iso.rst
     - doc/connectivity/bluetooth/api/controller.rst
+    - doc/connectivity/bluetooth/shell/classic/a2dp.rst
+    - doc/connectivity/bluetooth/shell/host/iso.rst
+    - doc/connectivity/bluetooth/shell/audio/
     - samples/bluetooth/bap*/
     - samples/bluetooth/cap*/
     - samples/bluetooth/hap*/
@@ -462,6 +467,7 @@ Bluetooth Audio:
     - pin-zephyr
     - niym-ot
     - jthm-ot
+    - babrsn
   files:
     - subsys/bluetooth/audio/
     - include/zephyr/bluetooth/audio/
@@ -472,6 +478,7 @@ Bluetooth Audio:
     - tests/bluetooth/tester/overlay-le-audio.conf
     - tests/bluetooth/tester/src/audio/
     - doc/connectivity/bluetooth/api/audio/
+    - doc/connectivity/bluetooth/shell/audio/
     - samples/bluetooth/bap*/
     - samples/bluetooth/cap*/
     - samples/bluetooth/hap*/
@@ -489,8 +496,8 @@ Bluetooth Classic:
     - lylezhu2012
   collaborators:
     - jhedberg
-    - sjanc
   files:
+    - doc/connectivity/bluetooth/shell/classic/a2dp.rst
     - subsys/bluetooth/common/
     - subsys/bluetooth/host/classic/
     - include/zephyr/bluetooth/classic/
@@ -507,9 +514,10 @@ Bluetooth ISO:
   collaborators:
     - jhedberg
     - kruithofa
+    - rugeGerritsen
   files:
     - include/zephyr/bluetooth/iso.h
-    - doc/connectivity/bluetooth/api/shell/iso.rst
+    - doc/connectivity/bluetooth/shell/host/iso.rst
     - samples/bluetooth/iso_*/
     - subsys/bluetooth/Kconfig.iso
     - subsys/bluetooth/host/iso.c
@@ -569,6 +577,9 @@ Build system:
     - misc/generated/
     - snippets/
     - modules/Kconfig.sysbuild
+    - scripts/list_boards.py
+    - scripts/list_hardware.py
+    - scripts/schemas/*-schema.yml
   labels:
     - "area: Build System"
   tests:
@@ -879,6 +890,7 @@ Devicetree:
     - galak
   files-regex:
     - dts/bindings/.*zephyr.*
+    - dts/bindings/[^,]+$
   files:
     - scripts/dts/
     - dts/common/
@@ -913,6 +925,7 @@ Disk:
     - subsys/sd/
     - tests/subsys/sd/
     - tests/drivers/disk/
+    - tests/drivers/build_all/disk/
     - include/zephyr/sd/
     - dts/bindings/sd/
     - dts/bindings/mmc/
@@ -999,8 +1012,8 @@ Documentation Infrastructure:
 Release Notes:
   status: maintained
   maintainers:
-    - dkalowsk
-    - mmahadevan108
+    - fabiobaltieri
+    - kartben
   collaborators:
     - kartben
   files:
@@ -1013,8 +1026,6 @@ Release Notes:
   status: maintained
   maintainers:
     - anangl
-  collaborators:
-    - decsny
   files:
     - drivers/adc/
     - include/zephyr/drivers/adc.h
@@ -1049,6 +1060,7 @@ Release Notes:
     - yperess
   files:
     - tests/drivers/bbram/
+    - tests/drivers/build_all/bbram/
     - drivers/bbram/
     - include/zephyr/drivers/bbram.h
     - doc/hardware/peripherals/bbram.rst
@@ -1150,6 +1162,23 @@ Release Notes:
   tests:
     - drivers.clock
 
+"Drivers: Comparator":
+  status: maintained
+  maintainers:
+    - bjarki-andreasen
+  files:
+    - drivers/comparator/
+    - dts/bindings/comparator/
+    - include/zephyr/drivers/comparator.h
+    - include/zephyr/drivers/comparator/
+    - tests/drivers/build_all/comparator/
+    - tests/drivers/comparator/
+    - doc/hardware/peripherals/comparator.rst
+  labels:
+    - "area: Comparator"
+  tests:
+    - drivers.comparator
+
 "Drivers: Console":
   status: odd fixes
   files:
@@ -1204,6 +1233,7 @@ Release Notes:
     - samples/drivers/crypto/
     - tests/crypto/
     - doc/services/crypto/
+    - tests/drivers/build_all/crypto/
   labels:
     - "area: Crypto / RNG"
   tests:
@@ -1362,6 +1392,8 @@ Release Notes:
     - dts/bindings/ethernet/
     - tests/drivers/ethernet/
     - include/zephyr/drivers/ethernet/
+    - include/zephyr/net/phy.h
+    - include/zephyr/net/ethernet.h
   labels:
     - "area: Ethernet"
   tests:
@@ -1371,6 +1403,8 @@ Release Notes:
   status: maintained
   maintainers:
     - de-nordic
+  collaborators:
+    - rghaddab
   files:
     - drivers/flash/
     - dts/bindings/flash_controller/
@@ -1382,6 +1416,7 @@ Release Notes:
     - doc/hardware/peripherals/flash.rst
     - include/zephyr/drivers/flash/
     - tests/drivers/flash_simulator/
+    - tests/drivers/build_all/flash/
   labels:
     - "area: Flash"
   tests:
@@ -1557,9 +1592,7 @@ Release Notes:
     - drivers.i3c
 
 "Drivers: IEEE 802.15.4":
-  status: maintained
-  maintainers:
-    - fgrandel
+  status: odd fixes
   collaborators:
     - rlubos
     - ankuns
@@ -1612,6 +1645,7 @@ Release Notes:
     - doc/hardware/peripherals/mdio.rst
     - drivers/mdio/
     - include/zephyr/drivers/mdio.h
+    - include/zephyr/net/mdio.h
     - tests/drivers/build_all/mdio/
     - dts/bindings/mdio/
   labels:
@@ -2048,6 +2082,11 @@ Release Notes:
   status: maintained
   maintainers:
     - jilaypandya
+  collaborators:
+    - bjarki-andreasen
+    - dipakgmx
+    - fabiobaltieri
+    - faxe1008
   files:
     - drivers/stepper/
     - include/zephyr/drivers/stepper.h
@@ -2105,6 +2144,7 @@ Release Notes:
     - include/zephyr/drivers/w1.h
     - include/zephyr/drivers/sensor/w1_sensor.h
     - tests/drivers/w1/
+    - tests/drivers/build_all/w1/
     - samples/drivers/w1/
   labels:
     - "area: W1"
@@ -2137,6 +2177,7 @@ Release Notes:
     - rlubos
     - kludentwo
     - krish2718
+    - MaochenWang1
   files:
     - drivers/wifi/
     - dts/bindings/wifi/
@@ -2163,7 +2204,7 @@ Release Notes:
   collaborators:
     - sachinthegreen
   files:
-    - drivers/wifi/nrfwifi/
+    - drivers/wifi/nrf_wifi/
     - dts/bindings/wifi/nordic,nrf70.yaml
     - dts/bindings/wifi/nordic,nrf70-qspi.yaml
     - dts/bindings/wifi/nordic,nrf70-spi.yaml
@@ -2271,18 +2312,6 @@ Filesystems:
   tests:
     - filesystem
 
-"Filesystems: FatFs reentrant support":
-  status: maintained
-  maintainers:
-    - ox11
-  files:
-    - modules/fatfs/zfs_ffsystem.c
-    - tests/subsys/fs/fat_fs_api/src/test_fat_file_reentrant.c
-  labels:
-    - "area: File System"
-  tests:
-    - filesystem.fat
-
 Formatted Output:
   status: maintained
   maintainers:
@@ -2358,6 +2387,8 @@ Input:
 IPC:
   status: maintained
   maintainers:
+    - doki-nordic
+  collaborators:
     - carlocaione
     - arnopo
   files:
@@ -2712,6 +2743,7 @@ hawkBit:
     - maass-hamburg
   files:
     - subsys/mgmt/hawkbit/
+    - include/zephyr/mgmt/hawkbit/
     - include/zephyr/mgmt/hawkbit.h
     - samples/subsys/mgmt/hawkbit/
   labels:
@@ -2901,8 +2933,6 @@ Networking:
   status: maintained
   maintainers:
     - jukkar
-  collaborators:
-    - fgrandel
   files:
     - doc/connectivity/networking/api/gptp.rst
     - include/zephyr/net/gptp.h
@@ -2969,14 +2999,12 @@ Networking:
     - subsys/net/lib/ptp/
     - samples/net/ptp/
   labels:
-    - "area: Networking"
+    - "area: PTP"
   tests:
     - sample.net.ptp
 
 "Networking: Native IEEE 802.15.4":
-  status: maintained
-  maintainers:
-    - fgrandel
+  status: odd fixes
   collaborators:
     - rlubos
     - jukkar
@@ -3018,6 +3046,7 @@ Networking:
   collaborators:
     - rlubos
     - krish2718
+    - MaochenWang1
   files:
     - doc/connectivity/networking/api/wifi.rst
     - include/zephyr/net/wifi*.h
@@ -3081,6 +3110,18 @@ Open AMP:
   tests:
     - sample.ipc.openamp
 
+PHYTEC Platforms:
+  status: maintained
+  maintainers:
+    - dnltz
+  collaborators:
+    - jonas-rem
+    - pefech
+  files:
+    - boards/phytec/
+  labels:
+    - "platform: PHYTEC"
+
 POSIX API layer:
   status: maintained
   maintainers:
@@ -3104,6 +3145,7 @@ Power management:
   status: maintained
   maintainers:
     - ceolin
+    - bjarki-andreasen
   collaborators:
     - nashif
     - teburd
@@ -3296,7 +3338,7 @@ Shields:
 SPARC arch:
   status: odd fixes
   collaborators:
-    - julius-barendt
+    - tbr-tt
   files:
     - arch/sparc/
     - include/zephyr/arch/sparc/
@@ -3308,7 +3350,7 @@ SPARC arch:
 Gaisler Platforms:
   status: odd fixes
   collaborators:
-    - julius-barendt
+    - tbr-tt
   files:
     - dts/sparc/gaisler/
     - soc/gaisler/
@@ -3459,15 +3501,17 @@ Nuvoton NPCM Platforms:
     - soc/nuvoton/npcm/
     - boards/nuvoton/npcm*/
     - dts/arm/nuvoton/
+    - drivers/*/*_npcm*
+    - include/zephyr/dt-bindings/*/npcm_*
   labels:
     - "platform: Nuvoton NPCM"
 
 Raspberry Pi Pico Platforms:
   status: maintained
   maintainers:
-    - yonsch
-  collaborators:
     - soburi
+  collaborators:
+    - yonsch
   files:
     - boards/raspberrypi/
     - boards/adafruit/kb2040/
@@ -3493,7 +3537,9 @@ Silabs Platforms:
     - boards/silabs/
     - dts/arm/silabs/
     - dts/bindings/*/silabs*
-    - drivers/*/*_gecko*
+    - drivers/*/*gecko*
+    - drivers/bluetooth/hci/hci_silabs_*
+    - drivers/*/*silabs*
   labels:
     - "platform: Silabs"
 
@@ -3512,11 +3558,25 @@ Silabs SiM3U Platforms:
     - drivers/*/Kconfig.si32
     - dts/arm/silabs/sim3u*
     - dts/bindings/*/*silabs,si32*
+    - include/zephyr/dt-bindings/pinctrl/*si32*
     - soc/silabs/silabs_sim3/
   labels:
     - "platform: Silabs SiM3U"
   description: >-
     SiM3U SoCs, dts files, and related drivers. Boards based on SiM3U SoCs.
+
+Gardena Platforms:
+  status: maintained
+  maintainers:
+    - rettichschnidi
+  collaborators:
+    - M1cha
+  files:
+    - boards/gardena/
+  labels:
+    - "platform: Gardena"
+  description: >-
+    Gardena board(s).
 
 Intel Platforms (X86):
   status: maintained
@@ -3621,7 +3681,7 @@ NXP Drivers:
     - drivers/*/*.mcux
     - drivers/*/*.nxp
     - drivers/*/*nxp*
-    - drivers/*/*kinetis*
+    - drivers/*/*/*kinetis*
     - drivers/misc/*/nxp*
     - include/zephyr/dt-bindings/*/*nxp*
     - include/zephyr/dt-bindings/*/*mcux*
@@ -4002,8 +4062,6 @@ TI K3 Platforms:
     - gramsay0
     - dnltz
   files:
-    - boards/phytec/phyboard_lyra/
-    - boards/phytec/phyboard_electra/
     - boards/ti/*am62*/
     - drivers/*/*ti_k3*
     - dts/bindings/*/ti,k3*
@@ -4024,8 +4082,12 @@ Xilinx Platforms:
   collaborators:
     - henrikbrixandersen
     - ibirnbaum
+    - michalsimek
   files:
+    - boards/amd/
+    - drivers/*/*xilinx*
     - drivers/*/*xlnx*
+    - drivers/*/*zynq*
     - dts/*/xilinx/
     - dts/bindings/*/*xlnx*
     - include/zephyr/*/*/*xlnx*
@@ -4104,6 +4166,20 @@ RTIO:
   tests:
     - rtio
 
+Secure storage:
+  status: maintained
+  maintainers:
+    - tomi-font
+  files:
+    - subsys/secure_storage/
+    - samples/psa/
+    - doc/services/secure_storage.rst
+    - tests/subsys/secure_storage/
+  labels:
+    - "area: Secure storage"
+  tests:
+    - psa.secure_storage
+
 Storage:
   status: odd fixes
   files:
@@ -4115,6 +4191,17 @@ Storage:
     - "area: Storage"
   tests:
     - storage
+
+Storage ZMS:
+  status: maintained
+  maintainers:
+    - rghaddab
+  files:
+    - subsys/fs/zms/
+    - include/zephyr/fs/zms.h
+    - samples/subsys/fs/zms/
+    - tests/subsys/fs/zms/
+    - doc/services/storage/zms/zms.rst
 
 Sysbuild:
   status: maintained
@@ -4268,6 +4355,7 @@ USB:
     - samples/subsys/usb/
     - subsys/usb/
     - tests/subsys/usb/
+    - tests/drivers/build_all/usb/
     - tests/drivers/usb/
     - tests/drivers/udc/
     - doc/connectivity/usb/
@@ -4732,6 +4820,8 @@ West:
 "West project: hal_rpi_pico":
   status: maintained
   maintainers:
+    - soburi
+  collaborators:
     - yonsch
   files:
     - modules/hal_rpi_pico/
@@ -4750,7 +4840,7 @@ West:
     - mnkp
     - rettichschnidi
   files:
-    - modules/Kconfig.silabs
+    - modules/hal_silabs/
   labels:
     - "platform: Silabs"
 
@@ -4792,6 +4882,14 @@ West:
   files: []
   labels:
     - "platform: TI"
+
+"West project: hal_wch":
+  status: maintained
+  maintainers:
+    - nzmichaelh
+    - kholia
+  files:
+    - modules/hal_wch/
 
 "West project: hal_wurthelektronik":
   status: maintained
@@ -4913,6 +5011,7 @@ West:
   tests:
     - benchmark.crypto.mbedtls
     - crypto.mbedtls
+    - psa.secure_storage
 
 "West project: mcuboot":
   status: maintained
@@ -4967,6 +5066,16 @@ West:
   files: []
   labels:
     - "area: native port"
+
+"West project: nrf_wifi":
+  status: maintained
+  maintainers:
+    - krish2718
+    - sachinthegreen
+  files:
+    - modules/nrf_wifi/
+  labels:
+    - "area: Wi-Fi"
 
 "West project: open-amp":
   status: odd fixes
@@ -5085,6 +5194,7 @@ West:
     - "area: TF-M"
   tests:
     - trusted-firmware-m
+    - psa.secure_storage
 
 "West project: tf-m-tests":
   status: maintained
@@ -5153,10 +5263,14 @@ West:
   maintainers:
     - krish2718
     - jukkar
+  collaborators:
+    - MaochenWang1
   files:
     - modules/hostap/
   labels:
     - "area: Wi-Fi"
+  tests:
+    - net.wifi
 
 Xtensa arch:
   status: maintained
@@ -5172,7 +5286,6 @@ Xtensa arch:
     - dts/xtensa/
     - boards/qemu/xtensa/
     - boards/cdns/xt-sim/
-    - soc/cdns/dc233c/
     - soc/cdns/dc233c/
     - soc/cdns/xtensa_sample_controller/
     - tests/arch/xtensa/
@@ -5284,6 +5397,8 @@ Testing with Renode:
     - fkokosinski
   files:
     - cmake/emu/renode.cmake
+    - soc/renode/
+    - boards/renode/
     - boards/**/*/support/*.repl
     - boards/**/*/support/*.resc
   labels:

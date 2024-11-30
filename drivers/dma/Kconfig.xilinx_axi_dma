@@ -65,7 +65,6 @@ config DMA_XILINX_AXI_DMA_LOCK_CHANNEL_IRQ
 		Only lock the interrupt of the DMA channel whose data are to be modified during dma_start.
 		Only select this when you can guarantee that dma_start is only called from the callback
 		registered for the same channel.
-
 endchoice
 
 config DMA_XILINX_AXI_DMA_POLL_INTERVAL

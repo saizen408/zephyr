@@ -88,6 +88,7 @@ set(SYSCALL_LIST_H_TARGET      syscall_list_h_target)
 set(DRIVER_VALIDATION_H_TARGET driver_validation_h_target)
 set(KOBJ_TYPES_H_TARGET        kobj_types_h_target)
 set(PARSE_SYSCALLS_TARGET      parse_syscalls_target)
+set(DEVICE_API_LD_TARGET       device_api_ld_target)
 
 define_property(GLOBAL PROPERTY PROPERTY_OUTPUT_FORMAT BRIEF_DOCS " " FULL_DOCS " ")
 set_property(   GLOBAL PROPERTY PROPERTY_OUTPUT_FORMAT elf32-little${ARCH}) # BFD format
@@ -598,6 +599,8 @@ add_custom_command(
   COMMAND_EXPAND_LISTS
 )
 add_custom_target(version_h DEPENDS ${PROJECT_BINARY_DIR}/include/generated/zephyr/version.h)
+zephyr_get(KERNEL_VERSION_CUSTOMIZATION SYSBUILD LOCAL)
+set_property(TARGET version_h PROPERTY KERNEL_VERSION_CUSTOMIZATION ${KERNEL_VERSION_CUSTOMIZATION})
 
 if(EXISTS ${APPLICATION_SOURCE_DIR}/VERSION)
   add_custom_command(
@@ -616,6 +619,8 @@ if(EXISTS ${APPLICATION_SOURCE_DIR}/VERSION)
     app_version_h
     DEPENDS ${PROJECT_BINARY_DIR}/include/generated/zephyr/app_version.h)
   add_dependencies(zephyr_interface app_version_h)
+  zephyr_get(APP_VERSION_CUSTOMIZATION SYSBUILD LOCAL)
+  set_property(TARGET app_version_h PROPERTY APP_VERSION_CUSTOMIZATION ${APP_VERSION_CUSTOMIZATION})
 endif()
 
 # Unfortunately, the order in which CMakeLists.txt code is processed
@@ -878,6 +883,37 @@ add_custom_target(${DRIVER_VALIDATION_H_TARGET} DEPENDS ${DRV_VALIDATION})
 include(${ZEPHYR_BASE}/cmake/kobj.cmake)
 gen_kobj(KOBJ_INCLUDE_PATH)
 
+# Generate sections for kernel device subsystems
+set(
+  DEVICE_API_LD_SECTIONS
+  ${CMAKE_CURRENT_BINARY_DIR}/include/generated/device-api-sections.ld
+  )
+
+set(DEVICE_API_LINKER_SECTIONS_CMAKE
+    ${CMAKE_CURRENT_BINARY_DIR}/include/generated/device-api-sections.cmake
+)
+
+add_custom_command(
+  OUTPUT ${DEVICE_API_LD_SECTIONS} ${DEVICE_API_LINKER_SECTIONS_CMAKE}
+  COMMAND
+    ${PYTHON_EXECUTABLE}
+    ${ZEPHYR_BASE}/scripts/build/gen_iter_sections.py
+    --alignment ${CONFIG_LINKER_ITERABLE_SUBALIGN}
+    --input ${struct_tags_json}
+    --tag __subsystem
+    --ld-output ${DEVICE_API_LD_SECTIONS}
+    --cmake-output ${DEVICE_API_LINKER_SECTIONS_CMAKE}
+  DEPENDS
+    ${ZEPHYR_BASE}/scripts/build/gen_iter_sections.py
+    ${struct_tags_json}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  )
+
+add_custom_target(${DEVICE_API_LD_TARGET}
+                  DEPENDS ${DEVICE_API_LD_SECTIONS}
+                          ${DEVICE_API_LINKER_SECTIONS_CMAKE}
+)
+
 # Add a pseudo-target that is up-to-date when all generated headers
 # are up-to-date.
 
@@ -908,6 +944,7 @@ add_dependencies(zephyr_interface
   ${SYSCALL_LIST_H_TARGET}
   ${DRIVER_VALIDATION_H_TARGET}
   ${KOBJ_TYPES_H_TARGET}
+  ${DEVICE_API_LD_TARGET}
   )
 
 add_custom_command(
@@ -1033,14 +1070,6 @@ if(CONFIG_USERSPACE)
 
   set(GEN_KOBJ_LIST ${ZEPHYR_BASE}/scripts/build/gen_kobject_list.py)
   set(PROCESS_GPERF ${ZEPHYR_BASE}/scripts/build/process_gperf.py)
-endif()
-
-get_property(GLOBAL_CSTD GLOBAL PROPERTY CSTD)
-if(DEFINED GLOBAL_CSTD)
-  message(DEPRECATION
-    "Global CSTD property is deprecated, see Kconfig.zephyr for C Standard options.")
-  set(CSTD ${GLOBAL_CSTD})
-  list(APPEND CMAKE_C_COMPILE_FEATURES ${compile_features_${CSTD}})
 endif()
 
 # @Intent: Obtain compiler specific flag for specifying the c standard
@@ -2233,3 +2262,12 @@ add_subdirectory_ifdef(
   CONFIG_MAKEFILE_EXPORTS
   cmake/makefile_exports
   )
+
+toolchain_linker_finalize()
+
+yaml_context(EXISTS NAME build_info result)
+if(result)
+  build_info(zephyr version VALUE ${PROJECT_VERSION_STR})
+  build_info(zephyr zephyr-base VALUE ${ZEPHYR_BASE})
+  yaml_save(NAME build_info)
+endif()

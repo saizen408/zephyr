@@ -29,6 +29,7 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/util.h>
 
+#include "bap_stream_rx.h"
 #include "bstests.h"
 #include "common.h"
 #include "bap_common.h"
@@ -72,8 +73,7 @@ CREATE_FLAG(flag_stream_stopped);
 CREATE_FLAG(flag_stream_released);
 CREATE_FLAG(flag_operation_success);
 
-static void stream_configured(struct bt_bap_stream *stream,
-			      const struct bt_audio_codec_qos_pref *pref)
+static void stream_configured(struct bt_bap_stream *stream, const struct bt_bap_qos_cfg_pref *pref)
 {
 	printk("Configured stream %p\n", stream);
 
@@ -155,43 +155,6 @@ static void stream_released(struct bt_bap_stream *stream)
 	SET_FLAG(flag_stream_released);
 }
 
-static void stream_recv_cb(struct bt_bap_stream *stream, const struct bt_iso_recv_info *info,
-			   struct net_buf *buf)
-{
-	struct audio_test_stream *test_stream = audio_test_stream_from_bap_stream(stream);
-
-	if ((test_stream->rx_cnt % 100U) == 0U) {
-		printk("[%zu]: Incoming audio on stream %p len %u and ts %u\n", test_stream->rx_cnt,
-		       stream, buf->len, info->ts);
-	}
-
-	if (test_stream->rx_cnt > 0U && info->ts == test_stream->last_info.ts) {
-		FAIL("Duplicated timestamp received: %u\n", test_stream->last_info.ts);
-		return;
-	}
-
-	if (test_stream->rx_cnt > 0U && info->seq_num == test_stream->last_info.seq_num) {
-		FAIL("Duplicated PSN received: %u\n", test_stream->last_info.seq_num);
-		return;
-	}
-
-	if (info->flags & BT_ISO_FLAGS_ERROR) {
-		FAIL("ISO receive error\n");
-		return;
-	}
-
-	if (info->flags & BT_ISO_FLAGS_LOST) {
-		FAIL("ISO receive lost\n");
-		return;
-	}
-
-	if (memcmp(buf->data, mock_iso_data, buf->len) == 0) {
-		test_stream->rx_cnt++;
-	} else {
-		FAIL("Unexpected data received\n");
-	}
-}
-
 static void stream_sent_cb(struct bt_bap_stream *stream)
 {
 	struct audio_test_stream *test_stream = audio_test_stream_from_bap_stream(stream);
@@ -235,7 +198,7 @@ static struct bt_bap_stream_ops stream_ops = {
 	.disabled = stream_disabled,
 	.stopped = stream_stopped,
 	.released = stream_released,
-	.recv = stream_recv_cb,
+	.recv = bap_stream_rx_recv_cb,
 	.sent = stream_sent_cb,
 	.connected = stream_connected,
 	.disconnected = stream_disconnected,
@@ -895,13 +858,8 @@ static void transceive_streams(void)
 	}
 
 	if (source_stream != NULL) {
-		const struct audio_test_stream *test_stream =
-			audio_test_stream_from_bap_stream(source_stream);
-
-		/* Keep receiving until we reach the minimum expected */
-		while (test_stream->rx_cnt < MIN_SEND_COUNT) {
-			k_sleep(K_MSEC(100));
-		}
+		printk("Waiting for data\n");
+		WAIT_FOR_FLAG(flag_audio_received);
 	}
 }
 
@@ -1197,9 +1155,8 @@ static void test_main_async_group(void)
 {
 	struct bt_bap_stream rx_stream = {0};
 	struct bt_bap_stream tx_stream = {0};
-	struct bt_audio_codec_qos rx_qos = BT_AUDIO_CODEC_QOS_UNFRAMED(7500U, 30U, 2U, 75U, 40000U);
-	struct bt_audio_codec_qos tx_qos =
-		BT_AUDIO_CODEC_QOS_UNFRAMED(10000U, 40U, 2U, 100U, 40000U);
+	struct bt_bap_qos_cfg rx_qos = BT_BAP_QOS_CFG_UNFRAMED(7500U, 30U, 2U, 75U, 40000U);
+	struct bt_bap_qos_cfg tx_qos = BT_BAP_QOS_CFG_UNFRAMED(10000U, 40U, 2U, 100U, 40000U);
 	struct bt_bap_unicast_group_stream_param rx_param = {
 		.qos = &rx_qos,
 		.stream = &rx_stream,

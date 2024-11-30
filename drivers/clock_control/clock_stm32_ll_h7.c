@@ -645,7 +645,7 @@ static int stm32_clock_control_get_subsys_rate(const struct device *clock,
 	return 0;
 }
 
-static const struct clock_control_driver_api stm32_clock_control_api = {
+static DEVICE_API(clock_control, stm32_clock_control_api) = {
 	.on = stm32_clock_control_on,
 	.off = stm32_clock_control_off,
 	.get_rate = stm32_clock_control_get_subsys_rate,
@@ -675,9 +675,18 @@ static void set_up_fixed_clock_sources(void)
 	}
 
 	if (IS_ENABLED(STM32_HSI_ENABLED)) {
-		/* Enable HSI oscillator */
-		LL_RCC_HSI_Enable();
-		while (LL_RCC_HSI_IsReady() != 1) {
+		if (IS_ENABLED(STM32_PLL_SRC_HSI) || IS_ENABLED(STM32_PLL2_SRC_HSI) ||
++		    IS_ENABLED(STM32_PLL3_SRC_HSI)) {
+			/* HSI calibration */
+			LL_RCC_HSI_SetCalibTrimming(RCC_HSICALIBRATION_DEFAULT);
+		}
+		/* Enable HSI if not enabled */
+		if (LL_RCC_HSI_IsReady() != 1) {
+			/* Enable HSI oscillator */
+			LL_RCC_HSI_Enable();
+			while (LL_RCC_HSI_IsReady() != 1) {
+			/* Wait for HSI ready */
+			}
 		}
 		/* HSI divider configuration */
 		LL_RCC_HSI_SetDivider(hsi_divider(STM32_HSI_DIVISOR));
@@ -763,7 +772,36 @@ static int set_up_plls(void)
 		stm32_clock_switch_to_hsi();
 		LL_RCC_SetAHBPrescaler(LL_RCC_SYSCLK_DIV_1);
 	}
+
+#if defined(CONFIG_STM32_MEMMAP) && defined(CONFIG_BOOTLOADER_MCUBOOT)
+	/*
+	 * Don't disable PLL during application initialization
+	 * that runs in memmap mode when (Q/O)SPI uses PLL
+	 * as its clock source.
+	 */
+#if defined(OCTOSPI1) || defined(OCTOSPI2)
+	if (LL_RCC_GetOSPIClockSource(LL_RCC_OSPI_CLKSOURCE) != LL_RCC_OSPI_CLKSOURCE_PLL1Q) {
+		LL_RCC_PLL1_Disable();
+	}
+	if (LL_RCC_GetOSPIClockSource(LL_RCC_OSPI_CLKSOURCE) != LL_RCC_OSPI_CLKSOURCE_PLL2R) {
+		LL_RCC_PLL2_Disable();
+	}
+#elif defined(QUADSPI)
+	if (LL_RCC_GetQSPIClockSource(LL_RCC_QSPI_CLKSOURCE) != LL_RCC_QSPI_CLKSOURCE_PLL1Q) {
+		LL_RCC_PLL1_Disable();
+	}
+	if (LL_RCC_GetQSPIClockSource(LL_RCC_QSPI_CLKSOURCE) != LL_RCC_QSPI_CLKSOURCE_PLL2R) {
+		LL_RCC_PLL2_Disable();
+	}
+#else
 	LL_RCC_PLL1_Disable();
+	LL_RCC_PLL2_Disable();
+#endif
+#else
+	LL_RCC_PLL1_Disable();
+	LL_RCC_PLL2_Disable();
+#endif
+	LL_RCC_PLL3_Disable();
 
 	/* Configure PLL source */
 

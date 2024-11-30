@@ -176,8 +176,8 @@ options are available passing the runner option, for instance
 More implementation details can be found in the :ref:`boards` documentation.
 As a quick reference, see these three board documentation pages:
 
-  - :ref:`sam4e_xpro` (ROM bootloader)
-  - :ref:`adafruit_feather_m0_basic_proto` (Adafruit UF2 bootloader)
+  - :zephyr:board:`sam4e_xpro` (ROM bootloader)
+  - :zephyr:board:`adafruit_feather_m0_basic_proto` (Adafruit UF2 bootloader)
   - :ref:`arduino_nano_33_iot` (Arduino bootloader)
   - :ref:`arduino_nano_33_ble` (Arduino legacy bootloader)
 
@@ -481,7 +481,7 @@ STM32CubeProgrammer Flash Host Tools
 ************************************
 
 STMicroelectronics provides `STM32CubeProgrammer`_ (STM32CubeProg) as an official programming tool
-for STM32 boards on Linux|r|, macOS|r|, and Windows|r| operating systems.
+for STM32 boards on Linux |reg|, macOS |reg|, and Windows |reg| operating systems.
 
 It provides an easy-to-use and efficient environment for reading, writing, and verifying device memory
 through both the debug interface (JTAG and SWD) and the bootloader interface (UART and USB DFU, I2C, SPI, and CAN).

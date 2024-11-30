@@ -31,7 +31,7 @@ NET_BUF_POOL_DEFINE(dns_msg_pool, DNS_RESOLVER_BUF_CTR,
 
 static struct socket_dispatch_table {
 	struct dns_socket_dispatcher *ctx;
-} dispatch_table[CONFIG_NET_SOCKETS_POLL_MAX];
+} dispatch_table[CONFIG_ZVFS_OPEN_MAX];
 
 static int dns_dispatch(struct dns_socket_dispatcher *dispatcher,
 			int sock, struct sockaddr *addr, size_t addrlen,
@@ -140,9 +140,12 @@ static int recv_data(struct net_socket_service_event *pev)
 	    (pev->event.revents & ZSOCK_POLLNVAL)) {
 		(void)zsock_getsockopt(pev->event.fd, SOL_SOCKET,
 				       SO_ERROR, &sock_error, &optlen);
-		NET_ERR("Receiver IPv%d socket error (%d)",
-			family == AF_INET ? 4 : 6, sock_error);
-		ret = DNS_EAI_SYSTEM;
+		if (sock_error > 0) {
+			NET_ERR("Receiver IPv%d socket error (%d)",
+				family == AF_INET ? 4 : 6, sock_error);
+			ret = DNS_EAI_SYSTEM;
+		}
+
 		goto unlock;
 	}
 
@@ -181,10 +184,8 @@ unlock:
 	return ret;
 }
 
-void dns_dispatcher_svc_handler(struct k_work *work)
+void dns_dispatcher_svc_handler(struct net_socket_service_event *pev)
 {
-	struct net_socket_service_event *pev =
-		CONTAINER_OF(work, struct net_socket_service_event, work);
 	int ret;
 
 	ret = recv_data(pev);
@@ -213,7 +214,8 @@ int dns_dispatcher_register(struct dns_socket_dispatcher *ctx)
 		 * already registered.
 		 */
 		if (ctx->type == entry->type &&
-		    ctx->local_addr.sa_family == entry->local_addr.sa_family) {
+		    ctx->local_addr.sa_family == entry->local_addr.sa_family &&
+		    ctx->ifindex == entry->ifindex) {
 			if (net_sin(&entry->local_addr)->sin_port ==
 			    net_sin(&ctx->local_addr)->sin_port) {
 				dup = true;
@@ -255,6 +257,15 @@ int dns_dispatcher_register(struct dns_socket_dispatcher *ctx)
 		entry->pair = ctx;
 
 		for (int i = 0; i < ctx->fds_len; i++) {
+			CHECKIF((int)ctx->fds[i].fd >= (int)ARRAY_SIZE(dispatch_table)) {
+				ret = -ERANGE;
+				goto out;
+			}
+
+			if (ctx->fds[i].fd < 0) {
+				continue;
+			}
+
 			if (dispatch_table[ctx->fds[i].fd].ctx == NULL) {
 				dispatch_table[ctx->fds[i].fd].ctx = ctx;
 			}
@@ -287,6 +298,15 @@ int dns_dispatcher_register(struct dns_socket_dispatcher *ctx)
 	ctx->pair = NULL;
 
 	for (int i = 0; i < ctx->fds_len; i++) {
+		if ((int)ctx->fds[i].fd >= (int)ARRAY_SIZE(dispatch_table)) {
+			ret = -ERANGE;
+			goto out;
+		}
+
+		if (ctx->fds[i].fd < 0) {
+			continue;
+		}
+
 		if (dispatch_table[ctx->fds[i].fd].ctx == NULL) {
 			dispatch_table[ctx->fds[i].fd].ctx = ctx;
 		}
@@ -308,17 +328,25 @@ out:
 
 int dns_dispatcher_unregister(struct dns_socket_dispatcher *ctx)
 {
+	int ret = 0;
+
 	k_mutex_lock(&lock, K_FOREVER);
 
 	(void)sys_slist_find_and_remove(&sockets, &ctx->node);
 
 	for (int i = 0; i < ctx->fds_len; i++) {
+		CHECKIF((int)ctx->fds[i].fd >= (int)ARRAY_SIZE(dispatch_table)) {
+			ret = -ERANGE;
+			goto out;
+		}
+
 		dispatch_table[ctx->fds[i].fd].ctx = NULL;
 	}
 
+out:
 	k_mutex_unlock(&lock);
 
-	return 0;
+	return ret;
 }
 
 void dns_dispatcher_init(void)
