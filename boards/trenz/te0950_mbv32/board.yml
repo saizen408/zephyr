@@ -1,0 +1,5 @@
+board:
+  name: te0950_mbv32
+  vendor: trenz
+  socs:
+  - name: mbv32

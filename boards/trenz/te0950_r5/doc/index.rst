@@ -17,10 +17,6 @@ This processing unit is based on an ARM Cortex-R5 CPU, it also enables the follo
 * Xilinx Zynq TTC (Cadence TTC)
 * Xilinx Zynq UART
 
-.. figure:: vck190-starter-kit.jpg
-   :align: center
-   :alt: Xilinx VCK190 Starter Kit
-
 Hardware
 ********
 Supported Features
@@ -62,17 +58,6 @@ all the code plus data of the application will be loaded in the sram0 region,
 which points to the DDR memory. The ocm0 memory area is currently available
 for usage, although nothing is placed there by default.
 
-Known Problems or Limitations
-==============================
-
-The following platform features are unsupported:
-
-* Dual-redundant Core Lock-step (DCLS) execution is not supported yet.
-* Only the first core of the R5 subsystem is supported.
-* Xilinx Zynq TTC driver does not support tickless mode operation.
-* The Cortex-R5 and the Cortex-A53 shares the same UART controller, more details below.
-
-
 References
 **********
 
@@ -80,3 +65,4 @@ References
 2. Cortex-R5 and Cortex-R5F Technical Reference Manual (ARM DDI 0460C ID021511)
 3. Zynq UltraScale+ Device Technical Reference Manual (UG1085)
 4. Kria vck190 Vision AI Starter Kit User Guide (UG1089)
+5. Trenz TE0950 TRM (https://wiki.trenz-electronic.de/display/PD/TE0950+TRM)
