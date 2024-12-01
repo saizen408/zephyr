@@ -43,6 +43,7 @@
 		led0 = &led_usr3_red;
 		led1 = &led_usr2_green;
 		sw0 = &sw0;
+		watchdog0 = &watchdog0;
 	};
 
 	chosen {
@@ -115,6 +116,14 @@
 			interrupts = <0 2>;
 			xlnx,one-timer-only = <0>;
 			clocks = <&clk100>;
+		};
+
+		watchdog0: watchdog@41a00000{
+			compatible = "xlnx,xps-timebase-wdt-1.00.a";
+			reg = <0x41a00000 0x10000>;
+			clocks = <&clk100>;
+			xlnx,wdt-interval = <31>;
+			xlnx,wdt-enable-once = <1>;
 		};
 
 		uart0: serial@40600000 {
