@@ -1,0 +1,13 @@
+sample:
+  description: TE0950 Artix System Control
+    application
+  name: sys_control
+common:
+  tags: system
+  integration_platforms:
+    - native_sim
+  harness: console
+  harness_config:
+    type: one_line
+    regex:
+      - "System (.*)"
