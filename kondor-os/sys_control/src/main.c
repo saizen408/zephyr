@@ -10,6 +10,7 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/watchdog.h>
+#include <zephyr/drivers/pwm.h>
 #include <zephyr/sys/reboot.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/task_wdt/task_wdt.h>
@@ -29,9 +30,16 @@
 #define LED1_NODE DT_ALIAS(led1)
 #define WDT_NODE DT_ALIAS(watchdog0)
 
+/*PWW DEFINES*/
+#define PWM_DEV_NODE DT_ALIAS(pwmfan0)
+#define DEFAULT_PERIOD_CYCLE 88
+#define DEFAULT_PULSE_CYCLE 44
+#define DEFAULT_PWM_PORT 0
+
 static const struct gpio_dt_spec leds[] = {GPIO_DT_SPEC_GET(LED0_NODE, gpios),
 					   GPIO_DT_SPEC_GET(LED1_NODE, gpios)};
 static const struct device *const hw_wdt_dev = DEVICE_DT_GET_OR_NULL(WDT_NODE);
+static const struct device *const pwm_dev = DEVICE_DT_GET_OR_NULL(PWM_DEV_NODE);
 
 static void task_wdt_callback(int channel_id, void *user_data)
 {
@@ -112,7 +120,20 @@ int main(void)
 	if(task_wdt_id !=0 ){
 		return STATUS_ERROR;
 	}
-	
+
+	// configure pwm fan
+	if(!device_is_ready(pwm_dev)) {
+		printk("PWM device is not ready\n");
+		return STATUS_ERROR;
+	}
+	if(pwm_set_cycles(pwm_dev, DEFAULT_PWM_PORT, 
+		DEFAULT_PERIOD_CYCLE, DEFAULT_PULSE_CYCLE, 0)){
+		printk("Failed to set period and pulse width\n");
+		return STATUS_ERROR;
+	}
+
+
+	// main super loop begin
 	while(1) {
 
 		ret = gpio_pin_toggle_dt(&leds[LED_STATUS]);
@@ -130,6 +151,7 @@ int main(void)
 		} else {
 			//'thump-thump' state
 			sleep_time = 100;
+			// printf("thump..\n");
 		}
 		ret = task_wdt_feed(task_wdt_id);
 		if(ret != 0){

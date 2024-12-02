@@ -9,6 +9,7 @@
 
 /dts-v1/;
 #include <zephyr/dt-bindings/gpio/gpio.h>
+#include <zephyr/dt-bindings/pwm/pwm.h>
 #include <mem.h>
 #include <zephyr/dt-bindings/input/input-event-codes.h>
 
@@ -44,6 +45,7 @@
 		led1 = &led_usr2_green;
 		sw0 = &sw0;
 		watchdog0 = &watchdog0;
+		pwmfan0 = &pwm_fan0;
 	};
 
 	chosen {
@@ -57,11 +59,11 @@
 	leds {
 		compatible = "gpio-leds";
 		led_usr3_red: led_usr3_red {
-			gpios = <&artix_axi_gpio_0 0 GPIO_ACTIVE_HIGH>;
+			gpios = <&c2c_axi_gpio_0 0 GPIO_ACTIVE_HIGH>;
 			label = "LED USR3 RED";
 		};
 		led_usr2_green: led_usr2_green {
-			gpios = <&artix_axi_gpio_0 1 GPIO_ACTIVE_HIGH>;
+			gpios = <&c2c_axi_gpio_0 1 GPIO_ACTIVE_HIGH>;
 			label = "LED USR2 GREEN";
 		};
 	};
@@ -69,7 +71,7 @@
 	gpio_keys {
 		compatible = "gpio-keys";
 		sw0: sw0 {
-			gpios = <&artix_axi_gpio_0 2 GPIO_ACTIVE_HIGH>;
+			gpios = <&c2c_axi_gpio_0 2 GPIO_ACTIVE_HIGH>;
 			label = "SW0";
 			zephyr,code = <INPUT_KEY_0>;
 		};
@@ -135,7 +137,7 @@
 			current-speed = <115200>;
 		};
 
-		artix_axi_gpio_0: gpio@a8080000 {
+		c2c_axi_gpio_0: gpio@a8080000 {
 			compatible = "xlnx,xps-gpio-1.00.a";
 			reg = <0xa8080000 0x10000>;
 			gpio-controller;
@@ -148,6 +150,21 @@
 			xlnx,is-dual = <0x0>;
 			xlnx,tri-default = <0xffffffff>;
     	};
+
+		pwm_fan0: pwm@41c10000 {
+			compatible = "xlnx,xps-timer-1.00.a-pwm";
+			reg = <0x41c10000 0x10000>;
+			interrupt-parent = <&axi_intc>;
+			interrupts = <3 2>;
+			clock-frequency = <100000000>;
+			xlnx,count-width = <0x20>;
+			xlnx,gen0-assert = <0x1>;
+			xlnx,gen1-assert = <0x1>;
+			xlnx,one-timer-only = <0x0>;
+			xlnx,trig0-assert = <0x1>;
+			xlnx,trig1-assert = <0x0>;
+			#pwm-cells = <3>;
+		};
 
 	};
 };
