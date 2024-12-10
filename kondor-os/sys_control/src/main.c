@@ -13,6 +13,7 @@
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/sys/reboot.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/sys/sys_io.h>
 #include <zephyr/task_wdt/task_wdt.h>
 
 /* Currently the Versal can also access this LED which
@@ -30,11 +31,14 @@
 #define LED1_NODE DT_ALIAS(led1)
 #define WDT_NODE DT_ALIAS(watchdog0)
 
-/*PWW DEFINES*/
+/* PWW DEFINES */
 #define PWM_DEV_NODE DT_ALIAS(pwmfan0)
 #define DEFAULT_PERIOD_CYCLE 88
 #define DEFAULT_PULSE_CYCLE 44
 #define DEFAULT_PWM_PORT 0
+
+/* Shared BRAM*/
+#define SHARED_BRAM_BASE_OFFSET 0xA8090000
 
 static const struct gpio_dt_spec leds[] = {GPIO_DT_SPEC_GET(LED0_NODE, gpios),
 					   GPIO_DT_SPEC_GET(LED1_NODE, gpios)};
@@ -151,6 +155,7 @@ int main(void)
 		} else {
 			//'thump-thump' state
 			sleep_time = 100;
+			sys_write32((uint32_t)beat_count, (mem_addr_t)(uintptr_t)SHARED_BRAM_BASE_OFFSET);
 			// printf("thump..\n");
 		}
 		ret = task_wdt_feed(task_wdt_id);
@@ -158,6 +163,9 @@ int main(void)
 			printk("Failed to feed watch dog: %d\n", ret);
 		}
 		k_msleep(sleep_time);
+		//check contents of shared bram
+		uint32_t val = sys_read32((mem_addr_t)(uintptr_t)SHARED_BRAM_BASE_OFFSET);
+		printk("0xA8090000 val: %x\n", val);
 	}
 	/* shouldn't be here*/
 	return STATUS_ERROR;

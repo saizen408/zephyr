@@ -82,9 +82,9 @@
 		reg = <0 DT_SIZE_K(128)>;
 	};
 
-	bram0: memory@c0000000 {
+	bram0: memory@a8090000 {
 		compatible = "mmio-sram";
-		reg = <0xc0000000 DT_SIZE_K(8)>;
+		reg = <0xa8090000 DT_SIZE_K(8)>;
 	};
 
 	clk100: clock {
