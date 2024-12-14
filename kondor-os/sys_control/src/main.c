@@ -16,6 +16,8 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/sys_io.h>
 #include <zephyr/task_wdt/task_wdt.h>
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(kondor);
 
 /* Currently the Versal can also access this LED which
 * may cause issues at boot. Considering removing the Versal's access*/
@@ -90,7 +92,7 @@ static uint32_t calcTempAdjust(FixedPid *pid, float currTemp){
 
 	// calculate total output
 	float output = pout + iout + dout;
-	printf("Actual output: %.3f\n", (double)output);
+	LOG_DBG("Actual output: %.3f", (double)output);
 
 	// Restrict to max/min
 	if(pid->currDuty >= pid->Max){
@@ -106,7 +108,7 @@ static uint32_t calcTempAdjust(FixedPid *pid, float currTemp){
 
 	// save error to previous error
 	pid->prevError = tempError;
-	printf("Current temp is: %.3f | Adujust duty cycle to: %.3f \n", (double)currTemp, (double)pid->currDuty);
+	LOG_DBG("Current temp is: %.3f | Adujust duty cycle to: %.3f ", (double)currTemp, (double)pid->currDuty);
 
 	return (uint32_t)((pid->currDuty/(float)100.0)*(float)DEFAULT_PERIOD_CYCLE);
 
@@ -123,7 +125,7 @@ static void task_wdt_callback(int channel_id, void *user_data)
 
 	/* Indicate error */
 	gpio_pin_set_dt(&leds[LED_ERROR], LED_ON);
-	printk("Resetting device...\n");
+	LOG_ERR("Watchdog triggered. Resetting device...");
 
 	sys_reboot(SYS_REBOOT_COLD);
 }
@@ -132,13 +134,13 @@ static int config_leds(void) {
 	int ret = 0;
 	for(int i = 0; i < NUM_LEDS; i++) {
 		if(!gpio_is_ready_dt(&leds[i])) {
-			printf("Status LED%d not ready\n", i);
+			LOG_ERR("Status LED%d not ready", i);
 			ret = -1;
 			break;
 		}
 		gpio_flags_t flags = i == LED_ERROR ? GPIO_OUTPUT_ACTIVE : GPIO_OUTPUT_INACTIVE;
 		if(gpio_pin_configure_dt(&leds[i], flags) != 0) {
-			printf("Failed to configure LED%d\n",i);
+			LOG_ERR("Failed to configure LED%d",i);
 			ret = -1;
 			break;
 		}
@@ -150,10 +152,10 @@ static int config_wdt(void) {
 	int task_wdt_id = STATUS_OK;
 	if (!device_is_ready(hw_wdt_dev)) {
 		//todo: add logs
-		printk("Hardware watchdog not ready; ignoring it.\n");
+		LOG_WRN("Hardware watchdog not ready; ignoring it.");
 	}
 	if (task_wdt_init(hw_wdt_dev) != STATUS_OK) {
-		printk("Task wdt init failure\n");
+		LOG_ERR("Task wdt init failure");
 		task_wdt_id = STATUS_ERROR;
 	}
 
@@ -161,7 +163,7 @@ static int config_wdt(void) {
 	if(task_wdt_id == STATUS_OK){
 		task_wdt_id = task_wdt_add(1100U, task_wdt_callback, NULL);
 		if(task_wdt_id < 0){
-			printk("Failed to retreive wdt task id: %d\n", task_wdt_id);
+			LOG_ERR("Failed to retreive wdt task id: %d", task_wdt_id);
 			task_wdt_id = STATUS_ERROR;
 		}
 	}
@@ -173,7 +175,7 @@ static int config_wdt(void) {
 int main(void)
 {
 	// todo: heartbeat code needs to be refactored into its own k_thread
-	printf("%s: Initializing heartbeat task\n", CONFIG_BOARD_TARGET);
+	LOG_INF("%s: Initializing sys_control", CONFIG_BOARD_TARGET);
 
 	int ret;
 	
@@ -196,7 +198,7 @@ int main(void)
 
 	// configure pwm fan
 	if(!device_is_ready(pwm_dev)) {
-		printk("PWM device is not ready\n");
+		LOG_ERR("PWM device is not ready");
 		return STATUS_ERROR;
 	}
 
@@ -206,7 +208,7 @@ int main(void)
 	// initialize fan to max speed
 	if(pwm_set_cycles(pwm_dev, DEFAULT_PWM_PORT, 
 		DEFAULT_PERIOD_CYCLE, DEFAULT_PULSE_CYCLE, 0)){
-		printk("Failed to set period and pulse width\n");
+		LOG_ERR("Failed to set period and pulse width");
 		return STATUS_ERROR;
 	}
 
@@ -216,7 +218,7 @@ int main(void)
 
 		ret = gpio_pin_toggle_dt(&leds[LED_STATUS]);
 		if(ret < 0) {
-			printf("Failed to toggle gpio\n");
+			LOG_ERR("Failed to toggle gpio");
 			return 0;
 		}
 		led_state = !led_state;
@@ -230,19 +232,19 @@ int main(void)
 			// check contents of shared bram (temp value provided by versal syscon)
 			currTemp = (float)sys_read32((mem_addr_t)(uintptr_t)SHARED_BRAM_BASE_OFFSET) / (float)1000.0;
 			
-			printk("0xA8090000 currTemp: %.3f\n", (double)currTemp);
+			LOG_DBG("0xA8090000 currTemp: %.3f", (double)currTemp);
 			// make sure value is valid
 			if(currTemp){
 				// invoke pid routine to update pwm
 				currDuty = calcTempAdjust(&pid, currTemp);
-				printk("setting pwm to: %u\n", currDuty);
+				LOG_DBG("setting pwm to: %u", currDuty);
 			} else {
 				currDuty = MAX_PULSE_CYCLE;
-				printk("Failed to read sysMon temperature\n");
+				LOG_ERR("Failed to read sysMon temperature");
 			}
 			if(pwm_set_cycles(pwm_dev, DEFAULT_PWM_PORT, 
 				DEFAULT_PERIOD_CYCLE, currDuty, 0)){
-				printk("Failed to set period and pulse width of %u\n", currDuty);
+				LOG_ERR("Failed to set period and pulse width of %u", currDuty);
 				return STATUS_ERROR;
 			}
 		} else {
@@ -251,7 +253,7 @@ int main(void)
 		}
 		ret = task_wdt_feed(task_wdt_id);
 		if(ret != 0){
-			printk("Failed to feed watch dog: %d\n", ret);
+			LOG_ERR("Failed to feed watch dog: %d", ret);
 		}
 		k_msleep(sleep_time);
 	}
