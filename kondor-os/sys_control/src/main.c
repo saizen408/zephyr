@@ -36,7 +36,8 @@
 #define PWM_DEV_NODE DT_ALIAS(pwmfan0)
 #define DEFAULT_PERIOD_CYCLE 88
 #define DEFAULT_PULSE_CYCLE 44
-#define SOC_TARGET_TEMP 35
+#define MAX_PULSE_CYCLE DEFAULT_PERIOD_CYCLE
+#define SOC_TARGET_TEMP 29
 #define DEFAULT_PWM_PORT 0
 
 /* Shared BRAM*/
@@ -179,6 +180,8 @@ int main(void)
 	bool led_state = false;
 	int beat_count = 0;
 	int sleep_time = 100;
+	float currTemp = 0;
+	uint32_t currDuty = MAX_PULSE_CYCLE;
 
 	// configure status light and wdt
 	if(config_leds() != 0 ){
@@ -225,22 +228,26 @@ int main(void)
 			beat_count = 0;
 			
 			// check contents of shared bram (temp value provided by versal syscon)
-			// uint32_t val = sys_read32((mem_addr_t)(uintptr_t)SHARED_BRAM_BASE_OFFSET);
-			// printk("0xA8090000 val: %x\n", val);
-			// invoke pid routine to update pwm
-			uint32_t newDuty = calcTempAdjust(&pid, SOC_TARGET_TEMP + 1);
-			printk("setting pwm to: %u\n", newDuty);
-
+			currTemp = (float)sys_read32((mem_addr_t)(uintptr_t)SHARED_BRAM_BASE_OFFSET) / (float)1000.0;
+			
+			printk("0xA8090000 currTemp: %.3f\n", (double)currTemp);
+			// make sure value is valid
+			if(currTemp){
+				// invoke pid routine to update pwm
+				currDuty = calcTempAdjust(&pid, currTemp);
+				printk("setting pwm to: %u\n", currDuty);
+			} else {
+				currDuty = MAX_PULSE_CYCLE;
+				printk("Failed to read sysMon temperature\n");
+			}
 			if(pwm_set_cycles(pwm_dev, DEFAULT_PWM_PORT, 
-				DEFAULT_PERIOD_CYCLE, newDuty, 0)){
-				printk("Failed to set period and pulse width of %u\n", newDuty);
+				DEFAULT_PERIOD_CYCLE, currDuty, 0)){
+				printk("Failed to set period and pulse width of %u\n", currDuty);
 				return STATUS_ERROR;
 			}
 		} else {
 			//'thump-thump' state
 			sleep_time = 100;
-			// sys_write32((uint32_t)beat_count, (mem_addr_t)(uintptr_t)SHARED_BRAM_BASE_OFFSET);
-			// printf("thump..\n");
 		}
 		ret = task_wdt_feed(task_wdt_id);
 		if(ret != 0){
