@@ -6,7 +6,7 @@
 
 ####### LOG Settings #########
 CONFIG_LOG=y
-CONFIG_LOG_MODE_DEFERRED=y
+CONFIG_LOG_MODE_IMMEDIATE=y
 CONFIG_REQUIRES_FLOAT_PRINTF=y
 
 ####### General Settings #######

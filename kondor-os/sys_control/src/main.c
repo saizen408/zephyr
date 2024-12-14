@@ -39,7 +39,10 @@ LOG_MODULE_REGISTER(kondor);
 #define DEFAULT_PERIOD_CYCLE 88
 #define DEFAULT_PULSE_CYCLE 44
 #define MAX_PULSE_CYCLE DEFAULT_PERIOD_CYCLE
-#define SOC_TARGET_TEMP 29
+// https://docs.amd.com/r/en-US/ds957-versal-ai-core/Recommended-Operating-Conditions
+#define SOC_TARGET_TEMP 35
+#define SOC_MAX_TEMP 100
+#define SOC_MIN_TEMP 0
 #define DEFAULT_PWM_PORT 0
 
 /* Shared BRAM*/
@@ -233,8 +236,8 @@ int main(void)
 			currTemp = (float)sys_read32((mem_addr_t)(uintptr_t)SHARED_BRAM_BASE_OFFSET) / (float)1000.0;
 			
 			LOG_DBG("0xA8090000 currTemp: %.3f", (double)currTemp);
-			// make sure value is valid
-			if(currTemp){
+			// make sure value read is between 5 and 95 C
+			if(currTemp && (currTemp < (SOC_MAX_TEMP-5)) && (currTemp > (SOC_MIN_TEMP+5)) ){
 				// invoke pid routine to update pwm
 				currDuty = calcTempAdjust(&pid, currTemp);
 				LOG_DBG("setting pwm to: %u", currDuty);
