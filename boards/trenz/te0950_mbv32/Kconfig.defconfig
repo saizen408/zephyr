@@ -3,3 +3,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
+
+if BOARD_TE0950_MBV32
+
+DT_CHOSEN_Z_BRAM := zephyr,bram
+
+config SHARED_BRAM_BASE_OFFSET
+    hex
+	default $(dt_chosen_reg_addr_hex,$(DT_CHOSEN_Z_BRAM))
+
+endif # BOARD_TE0950_MBV32

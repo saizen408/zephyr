@@ -46,7 +46,7 @@ LOG_MODULE_REGISTER(kondor);
 #define DEFAULT_PWM_PORT 0
 
 /* Shared BRAM*/
-#define SHARED_BRAM_BASE_OFFSET 0xA8090000
+#define SHARED_BRAM_BASE_OFFSET CONFIG_SHARED_BRAM_BASE_OFFSET
 
 static const struct gpio_dt_spec leds[] = {GPIO_DT_SPEC_GET(LED0_NODE, gpios),
 					   GPIO_DT_SPEC_GET(LED1_NODE, gpios)};
@@ -235,7 +235,7 @@ int main(void)
 			// check contents of shared bram (temp value provided by versal syscon)
 			currTemp = (float)sys_read32((mem_addr_t)(uintptr_t)SHARED_BRAM_BASE_OFFSET) / (float)1000.0;
 			
-			LOG_DBG("0xA8090000 currTemp: %.3f", (double)currTemp);
+			LOG_DBG("%x currTemp: %.3f", SHARED_BRAM_BASE_OFFSET, (double)currTemp);
 			// make sure value read is between 5 and 95 C
 			if(currTemp && (currTemp < (SOC_MAX_TEMP-5)) && (currTemp > (SOC_MIN_TEMP+5)) ){
 				// invoke pid routine to update pwm
